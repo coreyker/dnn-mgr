@@ -2,7 +2,7 @@
     dataset : &trainset !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
         raw : !obj:GTZAN_dataset.GTZAN_dataset {
             which_set : 'train',
-            config : &fold !pkl: "%(fold_config)s"
+            config : &fold !pkl: "GTZAN_1024-fold-4_of_4.pkl"
         },
         transformer : !obj:GTZAN_dataset.GTZAN_standardizer {
             config : *fold
@@ -13,17 +13,17 @@
         layers : [
             !obj:pylearn2.models.mlp.RectifiedLinear {
                 layer_name : 'h0',
-                dim : %(dim_h0)i,
+                dim : 50,
                 irange : &irange .1
                 },
             !obj:pylearn2.models.mlp.RectifiedLinear {
                 layer_name : 'h1',
-                dim : %(dim_h1)i,
+                dim : 50,
                 irange : *irange
                 },
             !obj:pylearn2.models.mlp.RectifiedLinear {
                 layer_name : 'h2',
-                dim : %(dim_h2)i,
+                dim : 50,
                 irange : *irange
                 },
             !obj:pylearn2.models.mlp.Softmax {
@@ -63,7 +63,7 @@
     extensions: [
         !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
              channel_name: 'valid_y_misclass',
-             save_path: "%(best_model_save_path)s"
+             save_path: "./saved-rlu-505050/mlp_rlu-fold-4_of_4.pkl"
         },
         !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,
@@ -76,6 +76,6 @@
             decay_factor: .01
         },
     ],
-    save_path : "%(save_path)s",
+    save_path : "./saved-rlu-505050/save.pkl",
     save_freq : 1
 }

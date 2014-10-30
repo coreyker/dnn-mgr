@@ -81,8 +81,8 @@ def aggregate_bof(model, dataset, save_file=None):
 
 if __name__ == "__main__":
         
-    fold_file  = 'GTZAN_1024-fold-3_of_4.pkl'
-    model_file = 'mlp_rlu_fold3_best.pkl'    
+    fold_file  = 'GTZAN_1024-fold-4_of_4.pkl'
+    model_file = './saved-rlu-505050/mlp_rlu-fold-4_of_4.pkl' #'mlp_rlu_fold3_best.pkl'    
 
     # get model
     model = serial.load(model_file) 

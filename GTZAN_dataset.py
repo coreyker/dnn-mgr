@@ -169,8 +169,8 @@ class GTZAN_standardizer(Block):
 
     def __init__(self, config):
 
-        self._mean = config['mean']
-        self._std = config['std']
+        self._mean = np.array(config['mean'], dtype=np.float32)
+        self._std  = np.array(config['std'], dtype=np.float32)
         self.input_space = VectorSpace(len(self._mean))
 
         super(GTZAN_standardizer, self).__init__()

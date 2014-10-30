@@ -23,7 +23,7 @@ def test_svm(X, y, svm):
 		pred       = np.array( svm.predict(feats), dtype='int' )
 		vote_label = np.argmax( np.bincount(pred, minlength=10) )
 		
-		confusion[true_label, vote_label] += 1
+		confusion[int(true_label), int(vote_label)] += 1
 
 	total_error = 100*(1 - np.sum(np.diag(confusion)) / np.sum(confusion))
 
@@ -56,7 +56,7 @@ def grid_search(X_train, y_train, X_valid, y_valid, C_values):
 if __name__ == "__main__":
 
 	# load in BOF features
-	model = 'mlp_rlu_fold1_best'
+	model = './saved-rlu-505050/mlp_rlu-fold-4_of_4'#'mlp_rlu_fold1_best'
 	train_BOF = model + '-train-BOF.pkl'
 	valid_BOF = model + '-valid-BOF.pkl'
 	test_BOF  = model + '-test-BOF.pkl'

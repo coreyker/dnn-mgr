@@ -121,8 +121,8 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		valid_support = np.hstack(valid_support)
 
 		# compute mean and std for training set only
-		sum_x  = np.zeros(n_feats)
-		sum_x2 = np.zeros(n_feats)		
+		sum_x  = np.zeros(n_feats, dtype=np.float32)
+		sum_x2 = np.zeros(n_feats, dtype=np.float32)	
 		n_samples = len(train_support)
 		
 		for n,i in enumerate(train_support):
@@ -193,8 +193,8 @@ def generate_folds_from_files(h5_file_name=None, train_file=None, valid_file=Non
 	valid_support = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in valid_files])
 
 	# compute mean and std for training set only
-	sum_x  = np.zeros(n_feats)
-	sum_x2 = np.zeros(n_feats)		
+	sum_x  = np.zeros(n_feats, dtype=np.float32)
+	sum_x2 = np.zeros(n_feats, dtype=np.float32)
 	n_samples = len(train_support)
 	
 	for n,i in enumerate(train_support):
