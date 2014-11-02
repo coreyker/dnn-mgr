@@ -9,7 +9,7 @@ from pylearn2.termination_criteria import MonitorBased, ChannelTarget, EpochCoun
 from pylearn2.base import StackedBlocks
 from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
 
-MAX_EPOCHS_UNSUPERVISED = 2
+MAX_EPOCHS_UNSUPERVISED = 10
 
 def get_rbm_trainer(model, dataset, save_path):
 
