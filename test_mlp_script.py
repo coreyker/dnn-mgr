@@ -36,7 +36,7 @@ def frame_misclass_error(model, dataset):
         sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
         sys.stdout.flush()
     
-        fft_data    = el[0]
+        fft_data    = np.array(el[0], dtype=np.float32)
         vote_labels = np.argmax(fprop(fft_data), axis=1)
         true_labels = np.argmax(el[1], axis=1)
 
@@ -77,7 +77,7 @@ def file_misclass_error(model, dataset):
         sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
         sys.stdout.flush()
     
-        fft_data     = el[0]
+        fft_data     = np.array(el[0], dtype=np.float32)
         frame_labels = np.argmax(fprop(fft_data), axis=1)
         hist         = np.bincount(frame_labels, minlength=n_classes)
         vote_label   = np.argmax(hist) # most used label
@@ -97,9 +97,10 @@ def file_misclass_error(model, dataset):
 
 
 if __name__ == '__main__':
-          
-    fold_file = 'GTZAN_1024-fold-4_of_4.pkl'
-    model_file = './saved-rlu-505050/mlp_rlu-fold-4_of_4.pkl'
+    
+    _, fold_file, model_file = sys.argv
+    #fold_file = 'GTZAN_1024-fold-4_of_4.pkl'
+    #model_file = './saved-rlu-505050/mlp_rlu-fold-4_of_4.pkl'
 
     # get model
     model = serial.load(model_file)  

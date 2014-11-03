@@ -25,7 +25,7 @@ def get_rbm_trainer(model, dataset, save_path):
     
     return Train(model=model, 
         algorithm=SGD(**config),
-        dataset=dataset,
+        dataset=dataset,    
         save_path=save_path, 
         save_freq=1
         )#, extensions=extensions)
@@ -55,7 +55,7 @@ if __name__=="__main__":
         datasets.append(dset)
 
     for i, (layer, dset) in enumerate(zip(layers, datasets)):
-        save_path = './saved/rbm%s_layer%d.pkl' % (ext, i+1)
+        save_path = './saved/rbm_layer%d%s' % (i+1, ext)
         train = get_rbm_trainer(model=layer, dataset=dset, save_path=save_path)
         train.main_loop()
 
