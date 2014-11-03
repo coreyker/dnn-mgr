@@ -5,6 +5,7 @@ from pylearn2.utils import serial
 from pylearn2.models.mlp import MLP, PretrainedLayer, Sigmoid, Softmax
 from pylearn2.training_algorithms.sgd import SGD, LinearDecayOverEpoch
 from pylearn2.training_algorithms.learning_rule import Momentum, MomentumAdjustor
+from pylearn2.termination_criteria import MonitorBased
 from pylearn2.train_extensions.best_params import MonitorBasedSaveBest
 from pylearn2.datasets.transformer_dataset import TransformerDataset
 from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
@@ -13,9 +14,9 @@ def get_trainer(model, trainset, validset, save_path):
   
   monitoring  = dict(valid=validset, train=trainset)
   termination = MonitorBased(channel_name='valid_y_misclass', prop_decrease=.001, N=5)
-  extensions  = [ MonitorBasedSaveBest(channel_name='valid_y_misclass', save_path=save_path),
+  extensions  = [MonitorBasedSaveBest(channel_name='valid_y_misclass', save_path=save_path),
                 MomentumAdjustor(start=1, saturate=50, final_momentum=.9),
-                LinearDecayOverEpoch(start=1, saturate=50, decay_factor=0.1) ]
+                LinearDecayOverEpoch(start=1, saturate=50, decay_factor=0.1)]
 
   config = {
   'learning_rate': .01,
@@ -41,6 +42,8 @@ if __name__=="__main__":
 
   base = cfg['h5_file_name'].split('.h5')[0]
   ext  = fold_config.split(base)[1]
+  ext  = ext.split('.pkl')[0] + '.cpu.pkl'
+
   save_path = './saved/mlp_sigmoid' + ext
 
   rbm_models = glob('./saved/rbm_layer*'+ext)
@@ -49,7 +52,7 @@ if __name__=="__main__":
   nhid       = 50
   n_classes  = 10
 
-  if 1: # use pretrained layer
+  if 0: # use pretrained layer
     layers = []
     for i,rbm in enumerate(rbm_models):
       layers.append(PretrainedLayer(layer_name='h'+str(i), layer_content=serial.load( rbm )))
