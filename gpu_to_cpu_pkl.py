@@ -7,17 +7,19 @@ if __name__=="__main__":
 	os.environ['THEANO_FLAGS']="device=cpu"
 	_, directory = sys.argv
 
-	for in_file in glob.glob(os.path.join(directory + '*.pkl')):
+	files_list = glob.glob(os.path.join(directory, '*.pkl'))
+	
+	for in_file in files_list:
 		if in_file.split('.')[-2] == 'cpu':
 			continue
 		
-		out_file = os.path.splitext(d)[0] + '.cpu.pkl'
+		out_file = os.path.splitext(in_file)[0] + '.cpu.pkl'
 		
 		if os.path.exists(out_file):
 			continue
 
 		model = serial.load(in_file)
-	 
+	 	
 		model2 = yaml_parse.load(model.yaml_src)
 		model2.set_param_values(model.get_param_values())
 	 
