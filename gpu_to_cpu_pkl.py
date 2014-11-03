@@ -16,9 +16,9 @@ if __name__=="__main__":
 		if os.path.exists(out_file):
 			continue
 
-		model = serial.load(in_path)
+		model = serial.load(in_file)
 	 
 		model2 = yaml_parse.load(model.yaml_src)
 		model2.set_param_values(model.get_param_values())
 	 
-		serial.save(out_path, model2)
+		serial.save(out_file, model2)
