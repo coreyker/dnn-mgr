@@ -7,7 +7,7 @@ if __name__=="__main__":
 	os.environ['THEANO_FLAGS']="device=cpu"
 	_, directory = sys.argv
 
-	for in_file in glob.glob(os.path.join(directory + '*.pkl'):
+	for in_file in glob.glob(os.path.join(directory + '*.pkl')):
 		if in_file.split('.')[-2] == 'cpu':
 			continue
 		
