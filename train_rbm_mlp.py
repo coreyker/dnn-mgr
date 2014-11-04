@@ -46,7 +46,7 @@ if __name__=="__main__":
 
   save_path = './saved/mlp_sigmoid' + ext
 
-  rbm_models = glob('./saved/rbm_layer*'+ext)
+  rbm_models = sorted(glob('./saved/rbm_layer*'+ext))
   nlayers    = len(rbm_models)
   nvis       = 513
   nhid       = 50
