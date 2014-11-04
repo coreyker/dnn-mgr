@@ -18,7 +18,7 @@ def make_h5_dataset(dataset_dir, h5_file_name='GTZAN_1024.h5', n_fft=1024, n_hop
 
 	classes = {'blues':0, 'classical':1, 'country':2, 'disco':3, 'hiphop':4, 'jazz':5, 'metal':6, 'pop':7, 'reggae':8, 'rock':9}
 
-	files_list = glob.glob( os.path.join( dataset_dir, '*.wav') )
+	files_list = sorted(glob.glob( os.path.join( dataset_dir, '*.wav') ))
 
 	h5file  = tables.open_file(h5_file_name, mode = "w", title = "GTZAN")
 	filters = tables.Filters(complib='blosc', complevel=9)
