@@ -113,8 +113,6 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 			test_support[n]  = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in test_files[n]])
 			train_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in train_files[n]])
 			valid_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in valid_files[n]])
-
-		pdb.set_trace()
 		
 		test_files    = sum(test_files,[])
 		train_files   = sum(train_files,[])
