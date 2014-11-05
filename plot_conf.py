@@ -1,3 +1,7 @@
+import matplotlib
+#matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+
 import sys
 import numpy as np
 import theano
@@ -6,7 +10,6 @@ from pylearn2.datasets.transformer_dataset import TransformerDataset
 import cPickle
 import GTZAN_dataset
 
-from matplotlib import pyplot as plt
 from test_mlp_script import frame_misclass_error, file_misclass_error
 
 def plot_conf_mat(conf, ax_labels):
@@ -35,7 +38,8 @@ def plot_conf_mat(conf, ax_labels):
 	plt.show()
 
 
-model_files = ['./saved-rlu-505050/mlp_rlu_fold1_best.pkl', './saved-rlu-505050/mlp_rlu_fold2_best.pkl', './saved-rlu-505050/mlp_rlu_fold3_best.pkl', './saved-rlu-505050/mlp_rlu_fold4_best.pkl']
+#model_files = ['./saved-rlu-505050/mlp_rlu_fold1_best.pkl', './saved-rlu-505050/mlp_rlu_fold2_best.pkl', './saved-rlu-505050/mlp_rlu_fold3_best.pkl', './saved-rlu-505050/mlp_rlu_fold4_best.pkl']
+model_files = ['./saved/mlp_rlu-fold-1_of_4.pkl', './saved/mlp_rlu-fold-2_of_4.pkl', './saved/mlp_rlu-fold-3_of_4.pkl', './saved/mlp_rlu-fold-4_of_4.pkl']
 fold_files  = ['GTZAN_1024-fold-1_of_4.pkl', 'GTZAN_1024-fold-2_of_4.pkl', 'GTZAN_1024-fold-3_of_4.pkl', 'GTZAN_1024-fold-4_of_4.pkl'] 
 
 fold_err  = len(model_files) * [None]
@@ -67,6 +71,9 @@ std_err = np.std(fold_err)
 
 ave_conf = np.mean(fold_conf/25.*100, axis=0)
 std_conf = np.std(fold_conf/25.*100, axis=0)
+
+print ave_err
+print std_err
 
 ax_labels = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 plot_conf_mat(ave_conf, ax_labels)

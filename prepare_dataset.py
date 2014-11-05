@@ -8,7 +8,7 @@ import theano
 import cPickle
 from scikits import audiolab
 
-# import pdb
+import pdb
 
 def make_h5_dataset(dataset_dir, h5_file_name='GTZAN_1024.h5', n_fft=1024, n_hop=512, n_frames_per_file=1200):
 
@@ -84,6 +84,7 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 	rng  = np.random.RandomState(314)
 	perm = [rng.permutation(n_files_per_class) + n*n_files_per_class for n in xrange(n_classes)]
 
+
 	for fold in xrange(n_folds):
 
 		print 'Creating fold %d of %d' % (fold+1, n_folds)
@@ -103,16 +104,18 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		# get equal number of train/test/valid samples from each class (stratified)
 		for n in xrange(n_classes):
 
-			perm[n] = rotate(perm[n], fold * n_test_files)
+			rot_perm = rotate(perm[n], fold * n_test_files)
 
-			test_files[n]  = sorted([i for i in perm[n][: n_test_files]])
-			train_files[n] = sorted([i for i in perm[n][n_test_files : n_test_files + n_train_files]])
-			valid_files[n] = sorted([i for i in perm[n][n_test_files + n_train_files:]])
+			test_files[n]  = sorted(rot_perm[: n_test_files])
+			train_files[n] = sorted(rot_perm[n_test_files : n_test_files + n_train_files])
+			valid_files[n] = sorted(rot_perm[n_test_files + n_train_files:])
 
 			test_support[n]  = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in test_files[n]])
 			train_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in train_files[n]])
 			valid_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in valid_files[n]])
 
+		pdb.set_trace()
+		
 		test_files    = sum(test_files,[])
 		train_files   = sum(train_files,[])
 		valid_files   = sum(valid_files,[])
