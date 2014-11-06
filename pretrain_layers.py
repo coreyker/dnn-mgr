@@ -12,7 +12,7 @@ from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
 
 import pdb
 
-MAX_EPOCHS_UNSUPERVISED = 1
+MAX_EPOCHS_UNSUPERVISED = 5
 USE_RBM_PRETRAIN = True
 
 '''
