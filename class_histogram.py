@@ -89,26 +89,18 @@ err_list = []
 #         err_list.append(i)
 
 for i, (l,p) in enumerate(zip(test_labels, top_pred)):    
-    if l not in p[:3]:
+    if l not in p[:2]:
         err_list.append(i)
 
 
 ax_labels = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
 
-n = err_list[0]
+n = err_list[18]
 err_file = test_files[n]
 err_hist = hist[n] 
+pred_label = ax_labels[np.argmax(err_hist)]
+true_label = ax_labels[err_file//100]
 
-
-
-
-
-
-
-
-
-
-
-
-
+print ff[err_file]
+print pred_label
 
