@@ -13,7 +13,7 @@ from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
 import pdb
 
 MAX_EPOCHS_UNSUPERVISED = 5
-USE_RBM_PRETRAIN = True
+#USE_RBM_PRETRAIN = True
 
 '''
 (Although it may be more complicated) We build our models and dataset using yaml in order to keep a record of how things were built
@@ -108,6 +108,8 @@ def get_ae_trainer(model, dataset, save_path):
 if __name__=="__main__":
 
     fold_config = sys.argv[1] # e.g., GTZAN_1024-fold-1_of_4.pkl
+    USE_RBM_PRETRAIN = sys.argv[2] # 0 or 1
+
     with open(fold_config) as f:
         cfg = cPickle.load(f)
 
