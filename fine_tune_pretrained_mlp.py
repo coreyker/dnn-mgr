@@ -5,6 +5,7 @@ from pylearn2.utils import serial
 from pylearn2.models.mlp import MLP, PretrainedLayer, Sigmoid, Softmax
 from pylearn2.training_algorithms.sgd import SGD, LinearDecayOverEpoch
 from pylearn2.training_algorithms.learning_rule import Momentum, MomentumAdjustor
+from pylearn2.training_algorithms.learning_rule import RMSProp
 from pylearn2.termination_criteria import MonitorBased
 from pylearn2.train_extensions.best_params import MonitorBasedSaveBest
 from pylearn2.datasets.transformer_dataset import TransformerDataset
@@ -44,12 +45,13 @@ def get_trainer(model, trainset, validset, save_path):
   monitoring  = dict(valid=validset, train=trainset)
   termination = MonitorBased(channel_name='valid_y_misclass', prop_decrease=.001, N=5)
   extensions  = [MonitorBasedSaveBest(channel_name='valid_y_misclass', save_path=save_path),
-                MomentumAdjustor(start=1, saturate=50, final_momentum=.9),
+                #MomentumAdjustor(start=1, saturate=50, final_momentum=.9),
                 LinearDecayOverEpoch(start=1, saturate=50, decay_factor=0.1)]
 
   config = {
-  'learning_rate': .1,
-  'learning_rule': Momentum(0.5),
+  'learning_rate': .01,
+  #'learning_rule': Momentum(0.5),
+  'learning_rule': RMSProp(),
   'train_iteration_mode': 'shuffled_sequential',
   'batch_size': 250,
   #'batches_per_iter' : 100,
