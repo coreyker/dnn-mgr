@@ -51,9 +51,9 @@ def get_ae(nvis, nhid):
         nvis : %(nvis)i,
         nhid : %(nhid)i,
         irange : .1,
-        corruptor : !obj:pylearn2.corruption.BinomialCorruptor(corruption_level=0.1),
+        corruptor : !obj:pylearn2.corruption.BinomialCorruptor { corruption_level : .1 },
         act_enc : 'sigmoid',
-        act_dec : None  
+        act_dec : null  
     }''' % {'nvis' : nvis, 'nhid': nhid}  
 
     model = yaml_parse.load(model_yaml)
@@ -108,7 +108,7 @@ def get_ae_trainer(model, dataset, save_path):
 if __name__=="__main__":
 
     fold_config = sys.argv[1] # e.g., GTZAN_1024-fold-1_of_4.pkl
-    USE_RBM_PRETRAIN = sys.argv[2] # 0 or 1
+    USE_RBM_PRETRAIN = int(sys.argv[2]) # 0 or 1
 
     with open(fold_config) as f:
         cfg = cPickle.load(f)
@@ -141,6 +141,8 @@ if __name__=="__main__":
         dataset = yaml_parse.load( dataset_yaml )
 
         if USE_RBM_PRETRAIN:
+            print 'Pretraining layer %d with RBM' % i
+
             if i==0:
                 model = get_grbm(v,h)
             else:
@@ -149,6 +151,8 @@ if __name__=="__main__":
             save_path = './saved/rbm_layer%d%s' % (i+1, ext)
             trainer   = get_rbm_trainer(model=model, dataset=dataset, save_path=save_path)
         else:
+            print 'Pretraining layer %d with AE' % i
+
             model     = get_ae(v,h)
             save_path = './saved/ae_layer%d%s' % (i+1, ext)
             trainer   = get_ae_trainer(model=model, dataset=dataset, save_path=save_path)
