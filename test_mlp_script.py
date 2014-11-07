@@ -1,9 +1,10 @@
-import sys
+import sys, re
 import numpy as np
 import theano
 from pylearn2.utils import serial
 from pylearn2.datasets.transformer_dataset import TransformerDataset
 import cPickle
+import pylearn2.config.yaml_parse as yaml_parse
 import GTZAN_dataset
 
 import pdb
@@ -149,22 +150,15 @@ def file_misclass_error_topx(model, dataset, topx=3):
 
 if __name__ == '__main__':
     
-    _, fold_file, model_file = sys.argv
-    #fold_file = 'GTZAN_1024-fold-4_of_4.pkl'
-    #model_file = './saved-rlu-505050/mlp_rlu-fold-4_of_4.pkl'
-
+    _, model_file = sys.argv
+    
     # get model
     model = serial.load(model_file)  
 
-    # get stanardized dictionary  
-    which_set = 'test'
-    with open(fold_file) as f:
-        config = cPickle.load(f)
-    
-    dataset = TransformerDataset(
-        raw = GTZAN_dataset.GTZAN_dataset(config, which_set),
-        transformer = GTZAN_dataset.GTZAN_standardizer(config)
-        )
+    # get dataset fold used for training from model's yaml_src
+    p = re.compile(r"which_set.*'(train)'")
+    dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
+    dataset = yaml_parse.load(dataset_yaml)
 
     # test error
     #err, conf = frame_misclass_error(model, dataset)

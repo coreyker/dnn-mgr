@@ -21,17 +21,13 @@ if __name__=="__main__":
 		if os.path.exists(out_file):
 			continue
 
-		model = serial.load(in_file)
-
-		if isinstance(model, RBM):
-			model2 = RBM(nvis=model.nvis, nhid=model.nhid)
-		else:
-			model2 = yaml_parse.load(model.yaml_src)
-
-		#model2 = copy.deepcopy(model)
-		#params = [np.array(p, dtype=np.float32) for p in model.get_param_values()]
+		model  = serial.load(in_file)
 		params = model.get_param_values()
 
+		model2 = yaml_parse.load(model.yaml_src)
+
 		model2.set_param_values(params)
+		model2.yaml_src = model.yaml_src
+		model2.dataset_yaml_src = model.dataset_yaml_src
 
 		serial.save(out_file, model2)
