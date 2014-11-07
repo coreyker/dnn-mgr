@@ -17,7 +17,7 @@ if __name__=="__main__":
 
 	for in_file in files_list:
 
-		if p.search(in_file) != None:
+		if p1.search(in_file) != None:
 			continue
 
 		out_file = os.path.splitext(in_file)[0] + '.cpu.pkl'
