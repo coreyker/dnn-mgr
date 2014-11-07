@@ -5,6 +5,14 @@ import pylearn2.config.yaml_parse as yaml_parse
 from pylearn2.models.rbm import RBM
 import copy
 
+'''
+When training is done on a GPU the model files won't unpickle properly.
+This script attempts to fix that. It must be run on a GPU with the environment
+variable THEANO_FLAGS exported beforehand. If pretraining is done then 
+we may have to delete the .cpu.pkl files for the composite MLP and re-run
+(because the layers models need to be properly converted first)
+'''
+
 if __name__=="__main__":
 
 	os.environ['THEANO_FLAGS']="device=cpu"
