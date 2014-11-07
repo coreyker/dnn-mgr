@@ -1,4 +1,4 @@
-import sys, cPickle
+import sys, re, cPickle
 from glob import glob
 from pylearn2.train import Train
 from pylearn2.utils import serial
@@ -67,40 +67,22 @@ def get_trainer(model, trainset, validset, save_path):
 
 if __name__=="__main__":
 
-  fold_config = sys.argv[1] # e.g., GTZAN_1024-fold-1_of_4.pkl
-  with open(fold_config) as f:
-    cfg = cPickle.load(f)
-
-  base = cfg['h5_file_name'].split('.h5')[0]
-  ext  = fold_config.split(base)[1]
-  ext  = ext.split('.pkl')[0] + '.cpu.pkl'  
-
-  nvis = 513
-  pretrained_layers = sorted(glob('./saved/rbm_layer*'+ext))
+  _, layer_glob_pattern, save_path = sys.argv # e.g.,layer_glob_pattern = './saved/rbm_layer*-fold-1_of_4.cpu.pkl'
+  pretrained_layers = sorted(glob(layer_glob_pattern))
+  print pretrained_layers
   
-  trainset_yaml = '''!obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
-        raw : !obj:GTZAN_dataset.GTZAN_dataset {
-            which_set : 'train',
-            config : &fold !pkl: "%(fold_config)s"
-        },
-        transformer : !obj:GTZAN_dataset.GTZAN_standardizer {
-            config : *fold
-        }
-    }''' % {'fold_config' : fold_config}
+  # get input model
+  input_model = serial.load(pretrained_layers[0])  
 
-  validset_yaml = '''!obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
-        raw : !obj:GTZAN_dataset.GTZAN_dataset {
-            which_set : 'valid',
-            config : &fold !pkl: "%(fold_config)s"
-        },
-        transformer : !obj:GTZAN_dataset.GTZAN_standardizer {
-            config : *fold
-        }
-    }''' % {'fold_config' : fold_config}
+  # get datasets for training and validation from pretrained input layer
+  p = re.compile(r"which_set.*'(train)'")
+  trainset_yaml = input_model.dataset_yaml_src
+  validset_yaml = p.sub("which_set: 'valid'", trainset_yaml)
 
+  trainset  = yaml_parse.load(trainset_yaml)
+  validset  = yaml_parse.load(validset_yaml)  
 
-  save_path = './saved/mlp_sigmoid' + ext
-  model     = get_mlp(nvis, pretrained_layers)
+  model     = get_mlp(input_model.nvis, pretrained_layers)
   trainset  = yaml_parse.load(trainset_yaml)
   validset  = yaml_parse.load(validset_yaml)
   trainer   = get_trainer(model=model, trainset=trainset, validset=validset, save_path=save_path)
