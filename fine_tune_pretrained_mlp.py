@@ -67,8 +67,8 @@ def get_trainer(model, trainset, validset, save_path):
 
 if __name__=="__main__":
 
-  _, layer_glob_pattern, save_path = sys.argv # e.g.,layer_glob_pattern = './saved/rbm_layer*-fold-1_of_4.cpu.pkl'
-  pretrained_layers = sorted(glob(layer_glob_pattern))
+  pretrained_layers = sorted(sys.argv[1:-1])
+  save_path = sys.argv[-1]
   print pretrained_layers
   
   # get input model
