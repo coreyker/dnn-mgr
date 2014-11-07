@@ -22,11 +22,11 @@ if __name__=="__main__":
 			continue
 
 		model  = serial.load(in_file)
-		params = model.get_param_values()
-
 		model2 = yaml_parse.load(model.yaml_src)
 
+		params = model.get_param_values()
 		model2.set_param_values(params)
+
 		model2.yaml_src = model.yaml_src
 		model2.dataset_yaml_src = model.dataset_yaml_src
 
