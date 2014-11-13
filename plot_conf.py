@@ -39,6 +39,44 @@ def plot_conf_mat(confusion, title):
     plt.xlabel(title)
     plt.show()
 
+def plot_ave_conf_mat(confusion_matrices, title):
+    
+    #plt.rc('text', usetex=True)
+    #plt.rc('font', family='serif')
+
+    labels = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
+    ave_confusion = np.mean(confusion_matrices, axis=0)
+    std_confusion = np.std(confusion_matrices, axis=0)
+
+    fig = plt.figure()
+    ax  = fig.add_subplot(111)
+    ax.set_aspect(1)
+    ax.imshow(np.array(ave_confusion), cmap=plt.cm.gray_r, interpolation='nearest')
+
+    width,height = ave_confusion.shape
+    for x in xrange(width):
+        for y in xrange(height):
+            if ave_confusion[x][y]<50:
+                color='k'
+            else:
+                color='w'
+            mean = ave_confusion[x][y]
+            std  = std_confusion[x][y]
+            ax.annotate('$%2.1f$' % mean, xy=(y, x), horizontalalignment='center', verticalalignment='bottom',color=color, fontsize=11)
+            ax.annotate('$\pm %2.1f$' % std, xy=(y, x), horizontalalignment='center', verticalalignment='top',color=color, fontsize=9)
+
+    ax.xaxis.tick_top()
+    plt.xticks(range(width), labels+['Pr'])
+    plt.yticks(range(height), labels+['F'])
+
+    xlabels = ax.get_xticklabels()
+    for label in xlabels: 
+        label.set_rotation(30) 
+
+    plt.xlabel(title)
+    plt.show()
+
+
 
 def augment_confusion_matrix(confusion):
     # add precision, f-score and average to confusion matrix
@@ -65,15 +103,17 @@ if __name__ == '__main__':
     model_files = ['./saved/mlp_rlu-fold-1_of_4.cpu.pkl',
         './saved/mlp_rlu-fold-2_of_4.cpu.pkl',
         './saved/mlp_rlu-fold-3_of_4.cpu.pkl',
-        './saved/mlp_rlu-fold-4_of_4.cpu.pkl',
-        './saved/mlp_rlu-filtered-fold.cpu.pkl',
-        './saved/mlp_from_rbm-fold-1_of_4.cpu.pkl',
-        './saved/mlp_from_rbm-fold-2_of_4.cpu.pkl',
-        './saved/mlp_from_rbm-fold-3_of_4.cpu.pkl',
-        './saved/mlp_from_rbm-fold-4_of_4.cpu.pkl',
-        './saved/mlp_from_rbm-filtered-fold.cpu.pkl']
+        './saved/mlp_rlu-fold-4_of_4.cpu.pkl']#,
+        #'./saved/mlp_rlu-filtered-fold.cpu.pkl']
+        #'./saved/mlp_from_rbm-fold-1_of_4.cpu.pkl',
+        #'./saved/mlp_from_rbm-fold-2_of_4.cpu.pkl',
+        #'./saved/mlp_from_rbm-fold-3_of_4.cpu.pkl',
+        #'./saved/mlp_from_rbm-fold-4_of_4.cpu.pkl',
+        #'./saved/mlp_from_rbm-filtered-fold.cpu.pkl']
 
     ave_acc = []
+    confusion_matrices = []
+
     for model_file in model_files:        
 
         # get model
@@ -91,18 +131,27 @@ if __name__ == '__main__':
         acc = 100 * np.sum(np.diag(confusion)) / np.sum(confusion)
         ave_acc.append(acc)
 
-        plt.ion()
-        plot_conf_mat(confusion, title='')
+        if 0:
+            plt.ion()
+            plot_conf_mat(confusion, title='')
 
-        save_file =  os.path.splitext(os.path.splitext(model_file)[0])[0] + '.pdf'
-        plt.savefig(save_file, format='pdf')
+            save_file =  os.path.splitext(os.path.splitext(model_file)[0])[0] + '.pdf'
+            plt.savefig(save_file, format='pdf')
+        
+        confusion_matrices.append(augment_confusion_matrix(confusion))
 
-    mlp_ave = np.mean(ave_acc[:4])
-    mlp_std = np.std(ave_acc[:4])
-    mlp_filt_ave = ave_acc[4]
+    # average confusions across folds
+    confusion_matrices = np.array(confusion_matrices)
 
-    mlp_rbm_ave = np.mean(ave_acc[5:9])
-    mlp_rbm_std = np.std(ave_acc[5:9])
-    mlp_rbm_filt_ave = ave_acc[9]
+    plt.ion()
+    plot_ave_conf_mat(confusion_matrices)
+
+    # mlp_ave = np.mean(ave_acc[:4])
+    # mlp_std = np.std(ave_acc[:4])
+    # mlp_filt_ave = ave_acc[4]
+
+    # mlp_rbm_ave = np.mean(ave_acc[5:9])
+    # mlp_rbm_std = np.std(ave_acc[5:9])
+    # mlp_rbm_filt_ave = ave_acc[9]
 
 
