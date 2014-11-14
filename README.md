@@ -1,7 +1,7 @@
-#About
+###About
 This repository contains research code evaluating deep neural networks (DNNs) for music genre recognition (MGR).
 
-#Requirements:
+###Requirements:
 Python as well as the following python packages (and their dependencies):
 NumPy
 SciPy
@@ -10,7 +10,7 @@ Theano
 Pylearn2
 scikits.audiolab (and libsndfile)
 
-#Instructions:
+###Instructions:
 1. Download the Tzanetakis genre set http://opihi.cs.uvic.ca/sound/genres.tar.gz
 2. Copy all of the files into a single directory
 3. Convert the files to WAV format 
