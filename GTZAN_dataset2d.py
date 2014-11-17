@@ -66,9 +66,9 @@ class GTZAN_iterator2d(FiniteDatasetIterator):
                 for index in next_index:
                     sample = data[index:index+n_frames_per_sample,:]
                     design_mat.append( sample.reshape((np.prod(sample.shape),)) )
+                design_mat = np.vstack(design_mat)
 
                 if fn:
-                    pdb.set_trace()
                     output.append( fn(design_mat) )
                 else:
                     output.append( design_mat )
@@ -96,9 +96,10 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
         self.n_frames_per_file = config['n_frames_per_file']
         self.n_frames_per_sample = 10#config['n_frames_per_sample']
         
-        view_converter = DefaultViewConverter((513, self.n_frames_per_sample,1))
+        view_converter = DefaultViewConverter((513, self.n_frames_per_sample, 1))
         
-        super(GTZAN_dataset2d, self).__init__(X=data.X, y=data.y)
+        super(GTZAN_dataset2d, self).__init__(X=data.X, y=data.y,
+            view_converter=view_converter)
 
     def __del__(self):
         self.h5file.close()        
@@ -255,12 +256,18 @@ if __name__=='__main__':
     with open('GTZAN_1024-fold-1_of_4.pkl') as f: config = cPickle.load(f)
     D = GTZAN_dataset2d.GTZAN_dataset2d(config)
 
-    feat_space   = Conv2DSpace(shape=(513,10), num_channels=1, axes=('b', 'c', 0, 1))
+    conv_space   = Conv2DSpace(shape=(513,10), num_channels=1, axes=('b', 'c', 0, 1))
+    feat_space   = VectorSpace(dim=513*10)    
     target_space = VectorSpace(dim=10)
-    data_specs   = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
+    
+    data_specs_conv = (CompositeSpace((conv_space,target_space)), ("features", "targets"))
+    data_specs_feat = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
+    
+    it_conv = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs_conv)
+    conv_batch = it_conv.next()
 
-    it = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs)
-    it.next()
+    it_feat = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs_feat)
+    feat_batch = it_feat.next()
 
 
 
