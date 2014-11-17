@@ -94,7 +94,7 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
 
         self.support = config[which_set]
         self.n_frames_per_file = config['n_frames_per_file']
-        self.n_frames_per_sample = 10#config['n_frames_per_sample']
+        self.n_frames_per_sample = config['n_frames_per_sample']
         
         view_converter = DefaultViewConverter((513, self.n_frames_per_sample, 1))
         
@@ -253,11 +253,11 @@ if __name__=='__main__':
     # test 
     import cPickle
 
-    with open('GTZAN_1024-fold-1_of_4.pkl') as f: config = cPickle.load(f)
+    with open('GTZAN_1024-40-fold-1_of_4.pkl') as f: config = cPickle.load(f)
     D = GTZAN_dataset2d.GTZAN_dataset2d(config)
 
-    conv_space   = Conv2DSpace(shape=(513,10), num_channels=1, axes=('b', 'c', 0, 1))
-    feat_space   = VectorSpace(dim=513*10)    
+    conv_space   = Conv2DSpace(shape=(513,40), num_channels=1, axes=('b', 'c', 0, 1))
+    feat_space   = VectorSpace(dim=513*40)    
     target_space = VectorSpace(dim=10)
     
     data_specs_conv = (CompositeSpace((conv_space,target_space)), ("features", "targets"))
