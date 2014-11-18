@@ -39,6 +39,7 @@ class GTZAN_iterator(FiniteDatasetIterator):
             When there are no more batches to return.
         """
         next_index = self._subset_iterator.next()
+        #pdb.set_trace()
         next_index = self._dataset.support[ next_index ] # !!! added line to iterate over different index set !!!
 
         # !!! fancy indexing doesn't seem to work w/ pytables (data[next_index] doesn't work, but data[next_index,:] does) !!!
@@ -171,7 +172,7 @@ class GTZAN_standardizer(Block):
 
         self._mean = np.array(config['mean'], dtype=np.float32)
         self._std  = np.array(config['std'], dtype=np.float32)
-        self.input_space = VectorSpace(len(self._mean))
+        self.input_space = VectorSpace(np.prod(self._mean.shape))
 
         super(GTZAN_standardizer, self).__init__()
 

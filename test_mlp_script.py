@@ -70,7 +70,7 @@ def file_misclass_error(model, dataset):
         batch_size=batch_size, 
         data_specs=data_specs
         )
-
+    
     i=0
     for el in iterator:
 
@@ -121,7 +121,7 @@ def file_misclass_error_topx(model, dataset, topx=3):
 
     hits = 0
     n = 0
-    i=0
+    i=0        
     for el in iterator:
 
         # display progress indicator
@@ -148,31 +148,43 @@ def file_misclass_error_topx(model, dataset, topx=3):
     return hits/float(n)*100
 
 
+def pp_array(array): # pretty printing
+    for row in array:
+        print ['%04.1f' % el for el in row]
+
+
 if __name__ == '__main__':
     
-    _, model_file = sys.argv
+    model_file = sys.argv[1]
     
     # get model
     model = serial.load(model_file)  
 
-    # get dataset fold used for training from model's yaml_src
-    p = re.compile(r"which_set.*'(train)'")
-    dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
-    dataset = yaml_parse.load(dataset_yaml)
+    if len(sys.argv)>2: # dataset config passed in from command line
+        print 'Using dataset passed in from command line:'
+        with open(sys.argv[2]) as f: cfg = cPickle.load(f)
+        dataset = TransformerDataset(
+            raw=GTZAN_dataset.GTZAN_dataset(which_set='test', config=cfg),
+            transformer=GTZAN_dataset.GTZAN_standardizer(config=cfg)
+            )
+
+    else: # get dataset from model's yaml_src
+        print "Using dataset from model's yaml src:"
+        p = re.compile(r"which_set.*'(train)'")
+        dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
+        dataset = yaml_parse.load(dataset_yaml)
 
     # test error
     #err, conf = frame_misclass_error(model, dataset)
     
     err, conf = file_misclass_error(model, dataset)
     
+    conf = conf.transpose()
     print 'test accuracy: %2.2f' % (100-err)
-    print 'confusion matrix:'
-    print conf/np.sum(conf, axis=1)
+    print 'confusion matrix (cols true):'
+    pp_array(100*conf/np.sum(conf, axis=0))
 
     # acc = file_misclass_error_topx(model, dataset, 2)
     # print 'test accuracy: %2.2f' % acc
-
-
-
 
 

@@ -56,7 +56,7 @@ def make_h5_dataset(dataset_dir, h5_file_name='GTZAN_1024.h5', n_fft=1024, n_hop
 	h5file.close()
 	print '' # newline
 
-def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.333):
+def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.333, n_frames_per_sample=1):
 	"""	
 	Generate dataset config files with stratified folds
 	"""	
@@ -88,7 +88,10 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 	for fold in xrange(n_folds):
 
 		print 'Creating fold %d of %d' % (fold+1, n_folds)
-		config_file =  os.path.splitext(h5_file_name)[0] + '-fold-%d_of_%d.pkl' % (fold+1, n_folds)
+		if n_frames_per_sample==1:
+			config_file = os.path.splitext(h5_file_name)[0] + '-fold-%d_of_%d.pkl' % (fold+1, n_folds)
+		else:
+			config_file = os.path.splitext(h5_file_name)[0] + '-%d-fold-%d_of_%d.pkl' % (n_frames_per_sample, fold+1, n_folds)
 		
 		if os.path.exists( config_file ):	
 			print config_file + ' already exists, aborting...'
@@ -110,9 +113,9 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 			train_files[n] = sorted(rot_perm[n_test_files : n_test_files + n_train_files])
 			valid_files[n] = sorted(rot_perm[n_test_files + n_train_files:])
 
-			test_support[n]  = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in test_files[n]])
-			train_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in train_files[n]])
-			valid_support[n] = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in valid_files[n]])
+			test_support[n]  = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in test_files[n]])
+			train_support[n] = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in train_files[n]])
+			valid_support[n] = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in valid_files[n]])
 		
 		test_files    = sum(test_files,[])
 		train_files   = sum(train_files,[])
@@ -122,15 +125,15 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		valid_support = np.hstack(valid_support)
 
 		# compute mean and std for training set only
-		sum_x  = np.zeros(n_feats, dtype=np.float32)
-		sum_x2 = np.zeros(n_feats, dtype=np.float32)	
+		sum_x  = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)
+		sum_x2 = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)	
 		n_samples = len(train_support)
 		
 		for n,i in enumerate(train_support):
 			sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
 			sys.stdout.flush()
 			
-			fft_frame = data.X[i,:]
+			fft_frame = data.X[i:i+n_frames_per_sample,:]
 			sum_x  += fft_frame
 			sum_x2 += fft_frame**2
 		print ''
@@ -138,9 +141,12 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		mean = sum_x / n_samples
 		var  = (sum_x2 - sum_x**2/n_samples)/(n_samples-1)
 
+		# add PCA whitening and dimensionality reductions for spectrogram patches....?
+
 		config = {
 			'h5_file_name': h5_file_name,
 			'n_frames_per_file': n_frames_per_file,
+			'n_frames_per_sample' : n_frames_per_sample,
 			'test': test_support, 
 			'train': train_support, 
 			'valid': valid_support,
@@ -157,14 +163,18 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 
 	h5file.close()
 
-def generate_folds_from_files(h5_file_name=None, train_file=None, valid_file=None, test_file=None):
+def generate_folds_from_files(h5_file_name=None, train_file=None, valid_file=None, test_file=None, n_frames_per_sample=1):
 
 	assert h5_file_name is not None
 	assert train_file is not None
 	assert valid_file is not None
 	assert test_file is not None
 
-	config_file = os.path.splitext(h5_file_name)[0] + '-filtered-fold.pkl'
+	if n_frames_per_sample==1:
+		config_file = os.path.splitext(h5_file_name)[0] + '-filtered-fold.pkl'
+	else:
+		config_file = os.path.splitext(h5_file_name)[0] + '-%d-filtered-fold.pkl' % n_frames_per_sample
+
 	if os.path.exists( config_file ):	
 		print config_file + ' already exists, aborting...'
 		return
@@ -189,20 +199,20 @@ def generate_folds_from_files(h5_file_name=None, train_file=None, valid_file=Non
 		lines = f.readlines()
 		test_files = [int(i)-1 for i in lines]				
 
-	test_support  = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in test_files])
-	train_support = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in train_files])
-	valid_support = np.hstack([i * n_frames_per_file + np.arange(n_frames_per_file) for i in valid_files])
+	test_support  = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in test_files])
+	train_support = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in train_files])
+	valid_support = np.hstack([i * n_frames_per_file + np.arange(0,n_frames_per_file,n_frames_per_sample) for i in valid_files])
 
 	# compute mean and std for training set only
-	sum_x  = np.zeros(n_feats, dtype=np.float32)
-	sum_x2 = np.zeros(n_feats, dtype=np.float32)
+	sum_x  = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)
+	sum_x2 = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)
 	n_samples = len(train_support)
 	
 	for n,i in enumerate(train_support):
 		sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
 		sys.stdout.flush()
 		
-		fft_frame = data.X[i,:]
+		fft_frame = data.X[i:i+n_frames_per_sample,:]
 		sum_x  += fft_frame
 		sum_x2 += fft_frame**2
 	print ''
@@ -213,6 +223,7 @@ def generate_folds_from_files(h5_file_name=None, train_file=None, valid_file=Non
 	config = {
 		'h5_file_name': h5_file_name,
 		'n_frames_per_file': n_frames_per_file,
+		'n_frames_per_sample' : n_frames_per_sample,
 		'test': test_support, 
 		'train': train_support, 
 		'valid': valid_support,
@@ -241,4 +252,7 @@ if __name__ == "__main__":
 	generate_fold_configs(h5_file_name)
 
 	generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'test_filtered.txt')
+	
+	#generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'valid_filtered.txt') #'test_filtered_1perartist.txt')
 
+	generate_fold_configs(h5_file_name, n_frames_per_sample=40)

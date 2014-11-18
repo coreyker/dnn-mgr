@@ -52,7 +52,7 @@ class GTZAN_iterator2d(FiniteDatasetIterator):
         # alternative for 2d data topology
         n_frames_per_sample = self._dataset.n_frames_per_sample
         spaces, sources = self._data_specs
-        output = []
+        output = []                
 
         for data, fn, source in safe_izip(self._raw_data, self._convert, sources):
             if source=='targets':
@@ -96,7 +96,8 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
         self.n_frames_per_file = config['n_frames_per_file']
         self.n_frames_per_sample = config['n_frames_per_sample']
         
-        view_converter = DefaultViewConverter((513, self.n_frames_per_sample, 1))
+        #!!!nb: 513 shouldn't be hardcoded here!!!
+        view_converter = DefaultViewConverter((self.n_frames_per_sample, 513, 1))
         
         super(GTZAN_dataset2d, self).__init__(X=data.X, y=data.y,
             view_converter=view_converter)
@@ -204,11 +205,17 @@ class GTZAN_standardizer2d(Block):
 
     def __init__(self, config):
 
-        self._mean = np.array(config['mean'], dtype=np.float32)
-        self._std  = np.array(config['std'], dtype=np.float32)
-        self.input_space = VectorSpace(len(self._mean))
+        # ...this doesn't work:
+        #self._mean = np.array(config['mean'], dtype=np.float32)
+        #self._std  = np.array(config['std'], dtype=np.float32)
+        #self.input_space = Conv2DSpace(shape=self._mean.shape, num_channels=1, axes=('b', 'c', 0, 1))
 
-        super(GTZAN_standardizer, self).__init__()
+        shape = (np.prod(config['mean'].shape), )
+        self._mean = np.reshape(np.array(config['mean'], dtype=np.float32), shape)
+        self._std  = np.reshape(np.array(config['std'], dtype=np.float32), shape)
+        self.input_space = VectorSpace(dim=shape[0])
+        
+        super(GTZAN_standardizer2d, self).__init__()
 
     def __call__(self, batch):
         """
