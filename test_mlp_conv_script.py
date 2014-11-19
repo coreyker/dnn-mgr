@@ -67,13 +67,15 @@ def file_misclass_error(model, dataset):
     n_frames_per_sample = dataset.raw.n_frames_per_sample
 
     batch_size = n_frames_per_file // n_frames_per_sample
-    data_specs = dataset.raw.get_data_specs()
-    #data_specs = (CompositeSpace((VectorSpace(dim=513*n_frames_per_sample), VectorSpace(dim=n_classes))), ("features", "targets")) 
+    #data_specs = dataset.raw.get_data_specs()
+    conv_space   = model.get_input_space()#Conv2DSpace(shape=(n_frames_per_sample, 513), num_channels=1, axes=('b', 0, 1, 'c',)   
+    target_space = VectorSpace(dim=n_classes)
+
+    data_specs = (CompositeSpace((conv_space, target_space)), ("features", "targets")) 
     iterator   = dataset.iterator(mode='sequential', 
         batch_size=batch_size, 
         data_specs=data_specs
         )
-    
     i=0
     for el in iterator:
 
@@ -167,8 +169,8 @@ if __name__ == '__main__':
         print 'Using dataset passed in from command line:'
         with open(sys.argv[2]) as f: cfg = cPickle.load(f)
         dataset = TransformerDataset(
-            raw=GTZAN_dataset.GTZAN_dataset(which_set='test', config=cfg),
-            transformer=GTZAN_dataset.GTZAN_standardizer(config=cfg)
+            raw=GTZAN_dataset2d.GTZAN_dataset2d(which_set='test', config=cfg),
+            transformer=GTZAN_dataset2d.GTZAN_standardizer2d(config=cfg)
             )
 
     else: # get dataset from model's yaml_src

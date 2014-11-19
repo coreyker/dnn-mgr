@@ -63,7 +63,8 @@ class GTZAN_dataset(DenseDesignMatrixPyTables):
         data         = self.h5file.get_node('/', "Data")
 
         self.support = config[which_set]
-        self.n_frames_per_file = config['n_frames_per_file']
+        self.n_frames_per_file   = config['n_frames_per_file']
+        self.n_frames_per_sample = config['n_frames_per_sample']
 
         super(GTZAN_dataset, self).__init__(X=data.X, y=data.y)
 
