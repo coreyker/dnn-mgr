@@ -256,3 +256,6 @@ if __name__ == "__main__":
 	#generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'valid_filtered.txt') #'test_filtered_1perartist.txt')
 
 	generate_fold_configs(h5_file_name, n_frames_per_sample=40)
+
+	generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'test_filtered.txt', n_frames_per_sample=40)
+
