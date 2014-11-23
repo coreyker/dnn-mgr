@@ -261,7 +261,7 @@ if __name__=='__main__':
     import cPickle
 
     with open('GTZAN_1024-40-fold-1_of_4.pkl') as f: config = cPickle.load(f)
-    D = GTZAN_dataset2d.GTZAN_dataset2d(config)
+    D = GTZAN_dataset2d(config)
 
     conv_space   = Conv2DSpace(shape=(513,40), num_channels=1, axes=('b', 'c', 0, 1))
     feat_space   = VectorSpace(dim=513*40)    

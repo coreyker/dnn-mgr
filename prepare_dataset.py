@@ -141,7 +141,21 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		mean = sum_x / n_samples
 		var  = (sum_x2 - sum_x**2/n_samples)/(n_samples-1)
 
-		# add PCA whitening and dimensionality reductions for spectrogram patches....?
+		# compute PCA whitening matrix
+		XX = 0
+		for n,i in enumerate(train_support):
+			sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
+			sys.stdout.flush()
+			
+			fft_frame = data.X[i:i+n_frames_per_sample,:]
+			X = (fft_frame - mean) / np.sqrt(var)
+			XX += X.T.dot(X)
+		print ''
+		XX /= len(train_support)
+
+		U,S,V = np.linalg.svd(XX)
+		epsilon = 0.1 # hard-coded for the moment... (to avoid ill-conditioning of whitening)
+		PCA_xform = (1./(np.sqrt(S) + epsilon)).dot(U.T)
 
 		config = {
 			'h5_file_name': h5_file_name,
@@ -154,7 +168,8 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 			'train_files': train_files,
 			'valid_files': valid_files,
 			'mean': mean,
-			'std': np.sqrt(var)
+			'std': np.sqrt(var),
+			'PCA_xform' : PCA_xform
 			}
 
 		# pickle config		

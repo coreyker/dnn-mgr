@@ -34,6 +34,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
         batch_size=batch_size, #1, for song-level....
         data_specs=data_specs
         )
+    # iterator = dataset.songlevel_iterator(mode='sequential', batch_size=1, data_specs=data_specs)
 
     # compute feature representation, aggregrate frames
     X=[]; y=[]; n=0
