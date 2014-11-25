@@ -3,6 +3,7 @@ import functools
 import tables
 
 from pylearn2.datasets.dataset import Dataset
+from pylearn2.datasets.transformer_dataset import TransformerDataset
 from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables
 from pylearn2.blocks import Block
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
@@ -71,7 +72,6 @@ class GTZAN_songlevel_iterator(FiniteDatasetIterator):
             rval, = rval
         return rval
 
-
 class GTZAN_dataset(DenseDesignMatrixPyTables):
 
     def __init__(self, config, which_set='train'):
@@ -99,72 +99,33 @@ class GTZAN_dataset(DenseDesignMatrixPyTables):
                  topo=None, targets=None, rng=None, data_specs=None,
                  return_tuple=False):
 
-        if topo is not None or targets is not None:
-            if data_specs is not None:
-                raise ValueError('In DenseDesignMatrix.iterator, both the '
-                                 '"data_specs" argument and deprecated '
-                                 'arguments "topo" or "targets" were '
-                                 'provided.',
-                                 (data_specs, topo, targets))
-
-            warnings.warn("Usage of `topo` and `target` arguments are "
-                          "being deprecated, and will be removed "
-                          "around November 7th, 2013. `data_specs` "
-                          "should be used instead.",
-                          stacklevel=2)
-
-            # build data_specs from topo and targets if needed
-            if topo is None:
-                topo = getattr(self, '_iter_topo', False)
-            if topo:
-                # self.iterator is called without a data_specs, and with
-                # "topo=True", so we use the default topological space
-                # stored in self.X_topo_space
-                assert self.X_topo_space is not None
-                X_space = self.X_topo_space
-            else:
-                X_space = self.X_space
-
-            if targets is None:
-                targets = getattr(self, '_iter_targets', False)
-            if targets:
-                assert self.y is not None
-                y_space = self.data_specs[0].components[1]
-                space = CompositeSpace((X_space, y_space))
-                source = ('features', 'targets')
-            else:
-                space = X_space
-                source = 'features'
-
-            data_specs = (space, source)
-            convert = None
-
+        if data_specs is None:
+            data_specs = self._iter_data_specs
         else:
-            if data_specs is None:
-                data_specs = self._iter_data_specs
+            self.data_specs = data_specs
 
-            # If there is a view_converter, we have to use it to convert
-            # the stored data for "features" into one that the iterator
-            # can return.
-            space, source = data_specs
-            if isinstance(space, CompositeSpace):
-                sub_spaces = space.components
-                sub_sources = source
+        # If there is a view_converter, we have to use it to convert
+        # the stored data for "features" into one that the iterator
+        # can return.
+        space, source = data_specs
+        if isinstance(space, CompositeSpace):
+            sub_spaces = space.components
+            sub_sources = source
+        else:
+            sub_spaces = (space,)
+            sub_sources = (source,)
+
+        convert = []
+        for sp, src in safe_zip(sub_spaces, sub_sources):
+            if src == 'features' and \
+               getattr(self, 'view_converter', None) is not None:
+                conv_fn = (lambda batch, self=self, space=sp:
+                           self.view_converter.get_formatted_batch(batch,
+                                                                   space))
             else:
-                sub_spaces = (space,)
-                sub_sources = (source,)
+                conv_fn = None
 
-            convert = []
-            for sp, src in safe_zip(sub_spaces, sub_sources):
-                if src == 'features' and \
-                   getattr(self, 'view_converter', None) is not None:
-                    conv_fn = (lambda batch, self=self, space=sp:
-                               self.view_converter.get_formatted_batch(batch,
-                                                                       space))
-                else:
-                    conv_fn = None
-
-                convert.append(conv_fn)
+            convert.append(conv_fn)
 
         # TODO: Refactor
         if mode is None:
@@ -183,108 +144,18 @@ class GTZAN_dataset(DenseDesignMatrixPyTables):
         if rng is None and mode.stochastic:
             rng = self.rng
 
-        return GTZAN_framelevel_iterator(self,
-                              mode(len(self.support), batch_size, num_batches, rng),
-                              data_specs=data_specs,
-                              return_tuple=return_tuple,
-                              convert=convert)
-
-
-    @functools.wraps(Dataset.iterator)
-    def songlevel_iterator(self, mode=None, batch_size=None, num_batches=None,
-                 topo=None, targets=None, rng=None, data_specs=None,
-                 return_tuple=False):
-
-        if topo is not None or targets is not None:
-            if data_specs is not None:
-                raise ValueError('In DenseDesignMatrix.iterator, both the '
-                                 '"data_specs" argument and deprecated '
-                                 'arguments "topo" or "targets" were '
-                                 'provided.',
-                                 (data_specs, topo, targets))
-
-            warnings.warn("Usage of `topo` and `target` arguments are "
-                          "being deprecated, and will be removed "
-                          "around November 7th, 2013. `data_specs` "
-                          "should be used instead.",
-                          stacklevel=2)
-
-            # build data_specs from topo and targets if needed
-            if topo is None:
-                topo = getattr(self, '_iter_topo', False)
-            if topo:
-                # self.iterator is called without a data_specs, and with
-                # "topo=True", so we use the default topological space
-                # stored in self.X_topo_space
-                assert self.X_topo_space is not None
-                X_space = self.X_topo_space
-            else:
-                X_space = self.X_space
-
-            if targets is None:
-                targets = getattr(self, '_iter_targets', False)
-            if targets:
-                assert self.y is not None
-                y_space = self.data_specs[0].components[1]
-                space = CompositeSpace((X_space, y_space))
-                source = ('features', 'targets')
-            else:
-                space = X_space
-                source = 'features'
-
-            data_specs = (space, source)
-            convert = None
-
-        else:
-            if data_specs is None:
-                data_specs = self._iter_data_specs
-
-            # If there is a view_converter, we have to use it to convert
-            # the stored data for "features" into one that the iterator
-            # can return.
-            space, source = data_specs
-            if isinstance(space, CompositeSpace):
-                sub_spaces = space.components
-                sub_sources = source
-            else:
-                sub_spaces = (space,)
-                sub_sources = (source,)
-
-            convert = []
-            for sp, src in safe_zip(sub_spaces, sub_sources):
-                if src == 'features' and \
-                   getattr(self, 'view_converter', None) is not None:
-                    conv_fn = (lambda batch, self=self, space=sp:
-                               self.view_converter.get_formatted_batch(batch,
-                                                                       space))
-                else:
-                    conv_fn = None
-
-                convert.append(conv_fn)
-
-        # TODO: Refactor
-        if mode is None:
-            if hasattr(self, '_iter_subset_class'):
-                mode = self._iter_subset_class
-            else:
-                raise ValueError('iteration mode not provided and no default '
-                                 'mode set for %s' % str(self))
-        else:
-            mode = resolve_iterator_class(mode)
-
-        if batch_size is None:
-            batch_size = getattr(self, '_iter_batch_size', None)
-        if num_batches is None:
-            num_batches = getattr(self, '_iter_num_batches', None)
-        if rng is None and mode.stochastic:
-            rng = self.rng
-
-        return GTZAN_songlevel_iterator(self,
+        if 'songlevel-features' in sub_sources: # songlevel iterator
+            return GTZAN_songlevel_iterator(self,
                               mode(len(self.file_list), batch_size, num_batches, rng),
                               data_specs=data_specs,
                               return_tuple=return_tuple,
                               convert=convert)
-
+        else:
+            return GTZAN_framelevel_iterator(self,
+                                  mode(len(self.support), batch_size, num_batches, rng),
+                                  data_specs=data_specs,
+                                  return_tuple=return_tuple,
+                                  convert=convert)
 
 class GTZAN_standardizer(Block):
 
@@ -341,17 +212,21 @@ if __name__=='__main__':
     # test 
     import cPickle
 
-    with open('GTZAN_1024-40-fold-1_of_4.pkl') as f: config = cPickle.load(f)
-    D = GTZAN_dataset(config)
-
+    with open('GTZAN_1024-fold-4_of_4.pkl') as f: config = cPickle.load(f)
+    
+    D = TransformerDataset(
+        raw = GTZAN_dataset(config),
+        transformer = GTZAN_standardizer(config))
+    
     feat_space   = VectorSpace(dim=513)    
     target_space = VectorSpace(dim=10)
     
-    data_specs = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
-    
-    framelevel_it = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs)
+    data_specs_frame = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
+    data_specs_song = (CompositeSpace((feat_space,target_space)), ("songlevel-features", "targets"))
+
+    framelevel_it = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs_frame)
     frame_batch = framelevel_it.next()
 
-    songlevel_it = D.songlevel_iterator(mode='sequential', batch_size=10, data_specs=data_specs)
+    songlevel_it = D.iterator(mode='sequential', batch_size=1, data_specs=data_specs_song)    
     song_batch = songlevel_it.next()
 

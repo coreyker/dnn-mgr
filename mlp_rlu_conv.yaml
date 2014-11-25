@@ -1,24 +1,19 @@
 !obj:pylearn2.train.Train {
-    dataset : &trainset !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
-        raw : !obj:GTZAN_dataset2d.GTZAN_dataset2d {
+    dataset : &trainset !obj:GTZAN_dataset2d.GTZAN_dataset2d {
             which_set : 'train',
             config : &fold !pkl: "%(fold_config)s"
-        },
-        transformer : !obj:GTZAN_dataset2d.GTZAN_standardizer2d {
-            config : *fold
-        }
     },
     model : !obj:pylearn2.models.mlp.MLP {
         batch_size : 30,
         input_space: !obj:pylearn2.space.Conv2DSpace {
-           shape: [40, 513],
+           shape: [40, 80],#513],
            num_channels: 1
         },
         layers : [
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
                 output_channels : 30,
-                kernel_shape : [6, 513],
+                kernel_shape : [10, 80],#513],
                 pool_shape : [3, 1],
                 pool_stride : [3, 1],
                 irange : &irange .1
@@ -46,14 +41,9 @@
         #batch_size : 1200,
         monitoring_dataset : {
             'train' : *trainset,
-            'valid' : !obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
-                raw : !obj:GTZAN_dataset2d.GTZAN_dataset2d {
+            'valid' : !obj:GTZAN_dataset2d.GTZAN_dataset2d {
                     which_set : 'valid',
                     config : *fold
-                },
-                transformer : !obj:GTZAN_dataset2d.GTZAN_standardizer2d {
-                    config : *fold
-                }
             }
         },
         termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {

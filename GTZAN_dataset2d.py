@@ -1,8 +1,10 @@
 import numpy as np
 import functools
 import tables
-
+import theano
+import theano.tensor as T
 from pylearn2.datasets.dataset import Dataset
+from pylearn2.datasets.transformer_dataset import TransformerDataset
 from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables, DefaultViewConverter
 from pylearn2.blocks import Block
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
@@ -18,6 +20,15 @@ from theano import config
 import pdb
 
 class GTZAN_iterator2d(FiniteDatasetIterator):
+
+    def __init__(self):
+
+        # compile theano function for pca whitening transform
+        X = T.dmatrix('X')
+        Z = T.transpose(T.dot(self._dataset.pca_xform, T.transpose(X-self._dataset.mean)))
+        self.transform = theano.function([X], Z)
+
+        super(GTZAN_iterator2d, self).__init__()
 
     @functools.wraps(SubsetIterator.next)
     def next(self):
@@ -64,8 +75,18 @@ class GTZAN_iterator2d(FiniteDatasetIterator):
             elif source=='features':
                 design_mat = []
                 for index in next_index:
-                    sample = data[index:index+n_frames_per_sample,:]
-                    design_mat.append( sample.reshape((np.prod(sample.shape),)) )
+                    sample  = data[index:index+n_frames_per_sample,:]
+
+                    # do pca whitening here (instead of in transformer dataset)
+                    #pca_sample = self._dataset.pca_xform.dot((sample-self._dataset.mean).transpose())
+                    #pca_sample = pca_sample.transpose()                    
+                    pca_sample = self.transform(sample)
+                    
+                    design_mat.append( pca_sample.reshape((np.prod(pca_sample.shape),)) )
+                    
+
+                    #design_mat.append( sample.reshape((np.prod(sample.shape),)) )
+                    
                 design_mat = np.vstack(design_mat)
 
                 if fn:
@@ -83,7 +104,7 @@ class GTZAN_iterator2d(FiniteDatasetIterator):
 
 class GTZAN_dataset2d(DenseDesignMatrixPyTables):
 
-    def __init__(self, config, which_set='train'):
+    def __init__(self, config, which_set='train', n_components=80, epsilon=3):
 
         keys = ['train', 'test', 'valid']
         assert which_set in keys
@@ -96,8 +117,20 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
         self.n_frames_per_file   = config['n_frames_per_file']
         self.n_frames_per_sample = config['n_frames_per_sample']
         
+        self.n_components = n_components        
+        self.epsilon = epsilon
+
+        # ...this doesn't work:
+        self.mean = np.array(config['mean'], dtype=np.float32)
+        self.std  = np.array(config['std'], dtype=np.float32)
+
+        # PCA_xform
+        S = config['S'][:n_components] # eigenvalues
+        U = config['U'][:,:n_components]
+        self.pca_xform = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T) 
+
         #!!!nb: 513 shouldn't be hardcoded here!!!
-        view_converter = DefaultViewConverter((self.n_frames_per_sample, 513, 1))
+        view_converter = DefaultViewConverter((self.n_frames_per_sample, n_components, 1))
         
         super(GTZAN_dataset2d, self).__init__(X=data.X, y=data.y,
             view_converter=view_converter)
@@ -111,72 +144,31 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
                  topo=None, targets=None, rng=None, data_specs=None,
                  return_tuple=False):
 
-        if topo is not None or targets is not None:
-            if data_specs is not None:
-                raise ValueError('In DenseDesignMatrix.iterator, both the '
-                                 '"data_specs" argument and deprecated '
-                                 'arguments "topo" or "targets" were '
-                                 'provided.',
-                                 (data_specs, topo, targets))
+        if data_specs is None:
+            data_specs = self._iter_data_specs
 
-            warnings.warn("Usage of `topo` and `target` arguments are "
-                          "being deprecated, and will be removed "
-                          "around November 7th, 2013. `data_specs` "
-                          "should be used instead.",
-                          stacklevel=2)
-
-            # build data_specs from topo and targets if needed
-            if topo is None:
-                topo = getattr(self, '_iter_topo', False)
-            if topo:
-                # self.iterator is called without a data_specs, and with
-                # "topo=True", so we use the default topological space
-                # stored in self.X_topo_space
-                assert self.X_topo_space is not None
-                X_space = self.X_topo_space
-            else:
-                X_space = self.X_space
-
-            if targets is None:
-                targets = getattr(self, '_iter_targets', False)
-            if targets:
-                assert self.y is not None
-                y_space = self.data_specs[0].components[1]
-                space = CompositeSpace((X_space, y_space))
-                source = ('features', 'targets')
-            else:
-                space = X_space
-                source = 'features'
-
-            data_specs = (space, source)
-            convert = None
-
+        # If there is a view_converter, we have to use it to convert
+        # the stored data for "features" into one that the iterator
+        # can return.
+        space, source = data_specs
+        if isinstance(space, CompositeSpace):
+            sub_spaces = space.components
+            sub_sources = source
         else:
-            if data_specs is None:
-                data_specs = self._iter_data_specs
+            sub_spaces = (space,)
+            sub_sources = (source,)
 
-            # If there is a view_converter, we have to use it to convert
-            # the stored data for "features" into one that the iterator
-            # can return.
-            space, source = data_specs
-            if isinstance(space, CompositeSpace):
-                sub_spaces = space.components
-                sub_sources = source
+        convert = []
+        for sp, src in safe_zip(sub_spaces, sub_sources):
+            if src == 'features' and \
+               getattr(self, 'view_converter', None) is not None:
+                conv_fn = (lambda batch, self=self, space=sp:
+                           self.view_converter.get_formatted_batch(batch,
+                                                                   space))
             else:
-                sub_spaces = (space,)
-                sub_sources = (source,)
+                conv_fn = None
 
-            convert = []
-            for sp, src in safe_zip(sub_spaces, sub_sources):
-                if src == 'features' and \
-                   getattr(self, 'view_converter', None) is not None:
-                    conv_fn = (lambda batch, self=self, space=sp:
-                               self.view_converter.get_formatted_batch(batch,
-                                                                       space))
-                else:
-                    conv_fn = None
-
-                convert.append(conv_fn)
+            convert.append(conv_fn)
 
         # TODO: Refactor
         if mode is None:
@@ -201,70 +193,100 @@ class GTZAN_dataset2d(DenseDesignMatrixPyTables):
                               return_tuple=return_tuple,
                               convert=convert)
 
-class GTZAN_standardizer2d(Block):
+# class GTZAN_standardizer2d(Block):
 
-    def __init__(self, config):
+#     def __init__(self, config, n_components=80, epsilon=3):
 
-        # ...this doesn't work:
-        #self._mean = np.array(config['mean'], dtype=np.float32)
-        #self._std  = np.array(config['std'], dtype=np.float32)
-        #self.input_space = Conv2DSpace(shape=self._mean.shape, num_channels=1, axes=('b', 'c', 0, 1))
+#         self.n_components = n_components        
+#         self.epsilon = epsilon
 
-        shape = (np.prod(config['mean'].shape), )
-        self._mean = np.reshape(np.array(config['mean'], dtype=np.float32), shape)
-        self._std  = np.reshape(np.array(config['std'], dtype=np.float32), shape)
-        self.input_space = VectorSpace(dim=shape[0])
+#         # ...this doesn't work:
+#         self._mean = np.array(config['mean'], dtype=np.float32)
+#         self._std  = np.array(config['std'], dtype=np.float32)
+#         #self.input_space = Conv2DSpace(shape=self._mean.shape, num_channels=1, axes=('b', 'c', 0, 1))
+
+#         # shape = (np.prod(config['mean'].shape), )
+#         # self._mean = np.reshape(np.array(config['mean'], dtype=np.float32), shape)
+#         # self._std  = np.reshape(np.array(config['std'], dtype=np.float32), shape)
+#         # self.input_space = VectorSpace(dim=shape[0])
         
-        super(GTZAN_standardizer2d, self).__init__()
+#         self.n_frames_per_sample = config['n_frames_per_sample']
+#         self.input_space = VectorSpace(dim=self.n_frames_per_sample*len(self._mean))
+#         #self.input_space = Conv2DSpace(shape=(self.n_frames_per_sample, len(self._mean)), num_channels=1, axes=('b', 'c', 0, 1))
+#         #self.input_space = Conv2DSpace(shape=(self.n_frames_per_sample, len(self._mean)), num_channels=1, axes=('b', 'c', 0, 1))
+        
+#         # PCA_xform
+#         S = config['S'][:n_components] # eigenvalues
+#         U = config['U'][:,:n_components]
+#         self.PCA_xform = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)        
 
-    def __call__(self, batch):
-        """
-        .. todo::
+#         super(GTZAN_standardizer2d, self).__init__()
 
-            WRITEME
-        """
-        if self.input_space:
-            self.input_space.validate(batch)
+#     def __call__(self, batch):
+#         """
+#         .. todo::
 
-        return (batch - self._mean) / self._std
+#             WRITEME
+#         """
+#         if self.input_space:
+#             self.input_space.validate(batch)
 
-    def set_input_space(self, space):
-        """
-        .. todo::
+        
+#         design_mat = []#np.zeros(len(batch), self.n_frames_per_sample*self.n_components)
+#         for i,ex in enumerate(batch):
 
-            WRITEME
-        """
-        self.input_space = space
+#             # 1. convert to matrix view of spectrogram
+#             ex = np.reshape(ex, (self.n_frames_per_sample, len(self._mean)))
+#             # 2. apply pca
+#             ex = self.PCA_xform.dot(ex.T)
+#             # 3. reshape back to column vec
+#             #design_mat[i] = np.reshape(ex.T, (self.n_frames_per_sample*self.n_components,))
+#             design_mat.append( np.reshape(ex.T, (self.n_frames_per_sample*self.n_components,)) )
+#         return design_mat
 
-    def get_input_space(self):
-        """
-        .. todo::
+#     def set_input_space(self, space):
+#         """
+#         .. todo::
 
-            WRITEME
-        """
-        if self.input_space is not None:
-            return self.input_space
-        raise ValueError("No input space was specified for this Block (%s). "
-                         "You can call set_input_space to correct that." %
-                         str(self))
+#             WRITEME
+#         """
+#         self.input_space = space
 
-    def get_output_space(self):
-        """
-        .. todo::
+#     def get_input_space(self):
+#         """
+#         .. todo::
 
-            WRITEME
-        """
-        return self.get_input_space()
+#             WRITEME
+#         """
+#         if self.input_space is not None:
+#             return self.input_space
+#         raise ValueError("No input space was specified for this Block (%s). "
+#                          "You can call set_input_space to correct that." %
+#                          str(self))
+
+#     def get_output_space(self):
+#         """
+#         .. todo::
+
+#             WRITEME
+#         """
+#         return self.get_input_space()
 
 if __name__=='__main__':
     # test 
     import cPickle
 
     with open('GTZAN_1024-40-fold-1_of_4.pkl') as f: config = cPickle.load(f)
-    D = GTZAN_dataset2d(config)
+    # D = TransformerDataset(
+    #     raw = GTZAN_dataset2d(config),
+    #     transformer = GTZAN_standardizer2d(config),
+    #     space_preserving=False)
 
-    conv_space   = Conv2DSpace(shape=(513,40), num_channels=1, axes=('b', 'c', 0, 1))
-    feat_space   = VectorSpace(dim=513*40)    
+    n_components=80
+    D = GTZAN_dataset2d(config, which_set='train', n_components=n_components, epsilon=3)
+
+    conv_space   = Conv2DSpace(shape=(n_components,40), num_channels=1, axes=('b', 'c', 0, 1))
+    feat_space   = VectorSpace(dim=n_components*40)    
     target_space = VectorSpace(dim=10)
     
     data_specs_conv = (CompositeSpace((conv_space,target_space)), ("features", "targets"))

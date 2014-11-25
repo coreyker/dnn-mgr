@@ -17,24 +17,12 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
     Y = model.fprop(X, return_all=True)
     fprop = theano.function([X],Y)
 
-    # fix---replace with song-level iterator from dataset....
     n_classes  = dataset.raw.y.shape[1]    
-    n_examples = len(dataset.raw.support)
-    n_frames_per_file   = dataset.raw.n_frames_per_file
-    n_frames_per_sample = dataset.raw.n_frames_per_sample
-
-    batch_size = n_frames_per_file // n_frames_per_sample
-    #data_specs = dataset.raw.get_data_specs()
     feat_space   = model.get_input_space()
     target_space = VectorSpace(dim=n_classes)
 
-    data_specs = (CompositeSpace((feat_space, target_space)), ("features", "targets")) 
-    
-    iterator   = dataset.iterator(mode='sequential', 
-        batch_size=batch_size, #1, for song-level....
-        data_specs=data_specs
-        )
-    # iterator = dataset.songlevel_iterator(mode='sequential', batch_size=1, data_specs=data_specs)
+    data_specs = (CompositeSpace((feat_space, target_space)), ("songlevel-features", "targets"))     
+    iterator = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
 
     # compute feature representation, aggregrate frames
     X=[]; y=[]; n=0
@@ -91,7 +79,7 @@ def test_classifier(X_test, y_test, classifier):
 if __name__ == "__main__":
 
     # load model
-    model_file = './saved/mlp_rlu-fold-1_of_4.cpu.pkl' #sys.argv[1]
+    model_file = './saved/mlp_rlu-fold-4_of_4.cpu.pkl' #sys.argv[1]
     model = serial.load(model_file) 
 
     # parse dataset
@@ -115,7 +103,7 @@ if __name__ == "__main__":
     X_test, y_test = aggregate_features(model, testset, which_layers=which_layers)
     
     # train then test:
-    classifier = train_classifier(X_train, y_train, method='linear_svm') #'random_forest'):
+    classifier = train_classifier(X_train, y_train, method='linear_svm') #'random_forest')
     confusion = test_classifier(X_test, y_test, classifier)
 
 

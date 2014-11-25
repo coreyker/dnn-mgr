@@ -125,17 +125,21 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		valid_support = np.hstack(valid_support)
 
 		# compute mean and std for training set only
-		sum_x  = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)
-		sum_x2 = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)	
+		#sum_x  = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)
+		#sum_x2 = np.zeros((n_frames_per_sample,n_feats), dtype=np.float32)	
+		sum_x  = np.zeros(n_feats, dtype=np.float32)
+		sum_x2 = np.zeros(n_feats, dtype=np.float32)	
 		n_samples = len(train_support)
 		
 		for n,i in enumerate(train_support):
-			sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
-			sys.stdout.flush()
-			
-			fft_frame = data.X[i:i+n_frames_per_sample,:]
-			sum_x  += fft_frame
-			sum_x2 += fft_frame**2
+			for j in xrange(n_frames_per_sample):
+				sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
+				sys.stdout.flush()
+				
+			#fft_frame = data.X[i:i+n_frames_per_sample,:]
+				fft_frame = data.X[i+j,:]
+				sum_x  += fft_frame
+				sum_x2 += fft_frame**2
 		print ''
 
 		mean = sum_x / n_samples
@@ -144,18 +148,19 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 		# compute PCA whitening matrix
 		XX = 0
 		for n,i in enumerate(train_support):
-			sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
-			sys.stdout.flush()
-			
-			fft_frame = data.X[i:i+n_frames_per_sample,:]
-			X = (fft_frame - mean) / np.sqrt(var)
-			XX += X.T.dot(X)
+			for j in xrange(n_frames_per_sample):
+				sys.stdout.write('\rProgress: %2.2f%%' % (n/float(n_samples)*100))
+				sys.stdout.flush()
+				
+			#fft_frame = data.X[i:i+n_frames_per_sample,:]
+				fft_frame = data.X[i+j,:]
+				X = np.reshape(fft_frame - mean, (len(fft_frame), 1))# / np.sqrt(var)
+				XX += X.dot(X.T)
 		print ''
 		XX /= len(train_support)
 
 		U,S,V = np.linalg.svd(XX)
-		epsilon = 0.1 # hard-coded for the moment... (to avoid ill-conditioning of whitening)
-		PCA_xform = (1./(np.sqrt(S) + epsilon)).dot(U.T)
+		#PCA_xform = (1./(np.sqrt(S) + epsilon)).dot(U.T)
 
 		config = {
 			'h5_file_name': h5_file_name,
@@ -169,7 +174,8 @@ def generate_fold_configs(h5_file_name='GTZAN_1024.h5', n_folds=4, valid_prop=0.
 			'valid_files': valid_files,
 			'mean': mean,
 			'std': np.sqrt(var),
-			'PCA_xform' : PCA_xform
+			'U' : U, # rot matrix
+			'S' : S # eigenvalues
 			}
 
 		# pickle config		
@@ -272,5 +278,5 @@ if __name__ == "__main__":
 
 	generate_fold_configs(h5_file_name, n_frames_per_sample=40)
 
-	generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'test_filtered.txt', n_frames_per_sample=40)
+	#generate_folds_from_files(h5_file_name, 'train_filtered.txt', 'valid_filtered.txt', 'test_filtered.txt', n_frames_per_sample=40)
 
