@@ -58,7 +58,10 @@
             channel_name : 'valid_y_misclass',
             prop_decrease : .001,
             N: 10
-        }#,cost : !obj:pylearn2.costs.mlp.Default {}
+        },
+        cost: !obj:pylearn2.costs.mlp.dropout.Dropout {
+            default_input_include_prob : .25
+        }
     },
     extensions: [
         !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
