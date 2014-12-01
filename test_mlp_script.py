@@ -158,14 +158,23 @@ def pp_array(array): # pretty printing
 
 if __name__ == '__main__':
     
-    model_file = sys.argv[1]
+    import argparse
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+        description='''Script to test DNN. Measure framelevel accuracy. 
+        Option to use a majority vote for over the frames in each test recording.
+        ''')
+
+    parser.add_argument('model_file', help='Path to trained model file')
+    parser.add_argument('--testset', help='Optional. If not specified, the testset from the models yaml src will be used')
+    parser.add_argument('--majority_vote', action='store_true', help='Measure framelevel accuracy with ')
+    args = parser.parse_args()
     
     # get model
-    model = serial.load(model_file)  
+    model = serial.load(args.model_file)  
 
-    if len(sys.argv)>2: # dataset config passed in from command line
+    if args.testset: # dataset config passed in from command line
         print 'Using dataset passed in from command line:'
-        with open(sys.argv[2]) as f: cfg = cPickle.load(f)
+        with open(args.testset) as f: cfg = cPickle.load(f)
         dataset = TransformerDataset(
             raw=GTZAN_dataset.GTZAN_dataset(which_set='test', config=cfg),
             transformer=GTZAN_dataset.GTZAN_standardizer(config=cfg)
@@ -177,10 +186,13 @@ if __name__ == '__main__':
         dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
         dataset = yaml_parse.load(dataset_yaml)
 
-    # test error
-    #err, conf = frame_misclass_error(model, dataset)
-    
-    err, conf = file_misclass_error(model, dataset)
+    # measure test error
+    if args.majority_vote:
+        print 'Using majority vote'
+        err, conf = file_misclass_error(model, dataset)
+    else:
+        print 'Not using majority vote'
+        err, conf = frame_misclass_error(model, dataset)    
     
     conf = conf.transpose()
     print 'test accuracy: %2.2f' % (100-err)
