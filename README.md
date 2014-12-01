@@ -9,6 +9,7 @@ Python as well as the following python packages (and their dependencies):
 - Theano
 - Pylearn2
 - scikits.audiolab (and libsndfile)
+- scikits-learn
 
 ###Instructions
 1. Download the Tzanetakis genre set http://opihi.cs.uvic.ca/sound/genres.tar.gz
