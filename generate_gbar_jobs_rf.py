@@ -8,9 +8,9 @@ jobscript = '''
 # -- specify queue --
 #PBS -q hpc
 # -- estimated wall clock time (execution time): hh:mm:ss --
-#PBS -l walltime=24:00:00
+#PBS -l walltime=8:00:00
 # --- number of processors/cores/nodes --
-#PBS -l nodes=1:ppn=1:gpus=1
+#PBS -l nodes=1:ppn=4:gpus=1
 # -- user email address --
 #PBS -M cmke@dtu.dk
 # -- mail notification --
@@ -31,11 +31,11 @@ python train_classifier_on_dnn_feats.py {model_file} {dataset_dir} --which_layer
 model_files  = ['S_50_RS.pkl', 'S_50_RSD.pkl', 'S_500_RS.pkl', 'S_500_RSD.pkl', 'F_50_RS.pkl', 'F_50_RSD.pkl', 'F_500_RS.pkl', 'F_500_RSD.pkl']
 dataset_dir  = '/dtu-compute/cosound/data/_tzanetakis_genre/audio'
 which_layers = ['0', '1', '2', '0 1 2']
-aggregate_features = ['', '--aggregate_features']
+aggregate_features = ['--aggregate_features', '']
 
 job_list = []
-for model in model_files:
-	for agg in aggregate_features:
+for agg in aggregate_features:
+	for model in model_files:
 		for l in which_layers:
 
 			savename = model.split('.pkl')[0]
