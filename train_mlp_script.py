@@ -24,6 +24,7 @@ if __name__=="__main__":
 		print 'Using dropout'
 		yaml_base_file = 'mlp_rlu_dropout.yaml'
 	else:
+		print 'Not using dropout'
 		yaml_base_file = 'mlp_rlu.yaml'
 
 	hyper_params = { 'dim_h0' : args.nunits,
