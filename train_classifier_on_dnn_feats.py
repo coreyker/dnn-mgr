@@ -98,7 +98,7 @@ def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     
     # train classifier
     if method=='random_forest':
-        classifier = RandomForestClassifier(n_estimators=1000, random_state=1234, verbose=verbose)
+        classifier = RandomForestClassifier(n_estimators=500, random_state=1234, verbose=verbose)
     else:
         classifier = SVC(C=0.5, kernel='linear', random_state=1234, verbose=verbose)
 
@@ -199,4 +199,7 @@ if __name__ == "__main__":
     else:
         confusion = test_classifier(X_test, y_test, classifier)
 
+    print 'Saving trained classifier'
+    with open(os.path.splitext(args.save_file)[0] + '.pkl', 'w') as f:
+        cPickle.dump(classifier, f)
 

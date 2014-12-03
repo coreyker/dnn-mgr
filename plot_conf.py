@@ -39,6 +39,39 @@ def plot_conf_mat(confusion, title):
     plt.xlabel(title)
     plt.show()
 
+def save_conf_mat(confusion, title):
+    
+    labels = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
+    augmented_confusion = augment_confusion_matrix(confusion)
+
+    fig = plt.figure()
+    ax  = fig.add_subplot(111)
+    ax.set_aspect(1)
+    ax.imshow(np.array(augmented_confusion), cmap=plt.cm.gray_r, interpolation='nearest')
+
+    width,height = augmented_confusion.shape
+    for x in xrange(width):
+        for y in xrange(height):
+            if augmented_confusion[x][y]<50:
+                color='k'
+            else:
+                color='w'
+            ax.annotate('%2.1f'%augmented_confusion[x][y], xy=(y, x), horizontalalignment='center', verticalalignment='center',color=color)
+
+    ax.xaxis.tick_top()
+    plt.xticks(range(width), labels+['Pr'])
+    plt.yticks(range(height), labels+['F'])
+
+    xlabels = ax.get_xticklabels()
+    for label in xlabels: 
+        label.set_rotation(30) 
+
+    plt.xlabel(title)
+    #plt.show()
+
+    plt.savefig(title + '.pdf', format='pdf')
+    plt.close()
+    
 def plot_ave_conf_mat(confusion_matrices, title):
     
     #plt.rc('text', usetex=True)
@@ -98,53 +131,81 @@ def augment_confusion_matrix(confusion):
     return augmented_confusion
 
 if __name__ == '__main__':
+
+    #ex: python plot_conf.py --file ./saved/*.txt
+    import argparse
     
-    #_, model_file = sys.argv
-    model_files = ['./saved/mlp_rlu-fold-1_of_4.cpu.pkl',
-        './saved/mlp_rlu-fold-2_of_4.cpu.pkl',
-        './saved/mlp_rlu-fold-3_of_4.cpu.pkl',
-        './saved/mlp_rlu-fold-4_of_4.cpu.pkl']#,
-        #'./saved/mlp_rlu-filtered-fold.cpu.pkl']
-        #'./saved/mlp_from_rbm-fold-1_of_4.cpu.pkl',
-        #'./saved/mlp_from_rbm-fold-2_of_4.cpu.pkl',
-        #'./saved/mlp_from_rbm-fold-3_of_4.cpu.pkl',
-        #'./saved/mlp_from_rbm-fold-4_of_4.cpu.pkl',
-        #'./saved/mlp_from_rbm-filtered-fold.cpu.pkl']
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+        description='''Script to generate confusion matrices.
+        ''')
+    
+    parser.add_argument('--file', nargs='*', help='File(s) listing file name and class for each test file')
+    args = parser.parse_args()
 
-    ave_acc = []
-    confusion_matrices = []
+    # tabulate confusions
+    n_classes = 10
+    classes = {'blues':0, 'classical':1, 'country':2, 'disco':3, 'hiphop':4, 'jazz':5, 'metal':6, 'pop':7, 'reggae':8, 'rock':9}    
 
-    for model_file in model_files:        
-
-        # get model
-        model = serial.load(model_file)  
-
-        # get dataset fold used for training from model's yaml_src
-        p = re.compile(r"which_set.*'(train)'")
-        dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
-        dataset = yaml_parse.load(dataset_yaml)
-
-        _, confusion = file_misclass_error(model, dataset)
+    for f in args.file:
         
-        confusion = confusion.transpose() # use true columns (instead of true rows)
+        confusion = np.zeros((n_classes, n_classes))
+        with open(f) as fname:
+            lines = fname.readlines()
 
-        acc = 100 * np.sum(np.diag(confusion)) / np.sum(confusion)
-        ave_acc.append(acc)
+        for l in lines:
+            s = l.split() 
+            true_class = classes[s[0].split('.')[0]]
+            pred_class = int(s[-1])
+            confusion[pred_class, true_class] += 1
 
-        if 0:
-            plt.ion()
-            plot_conf_mat(confusion, title='')
+        save_conf_mat(confusion, os.path.splitext(f)[0])
 
-            save_file =  os.path.splitext(os.path.splitext(model_file)[0])[0] + '.pdf'
-            plt.savefig(save_file, format='pdf')
+    # #_, model_file = sys.argv
+    # model_files = ['./saved/mlp_rlu-fold-1_of_4.cpu.pkl',
+    #     './saved/mlp_rlu-fold-2_of_4.cpu.pkl',
+    #     './saved/mlp_rlu-fold-3_of_4.cpu.pkl',
+    #     './saved/mlp_rlu-fold-4_of_4.cpu.pkl']#,
+    #     #'./saved/mlp_rlu-filtered-fold.cpu.pkl']
+    #     #'./saved/mlp_from_rbm-fold-1_of_4.cpu.pkl',
+    #     #'./saved/mlp_from_rbm-fold-2_of_4.cpu.pkl',
+    #     #'./saved/mlp_from_rbm-fold-3_of_4.cpu.pkl',
+    #     #'./saved/mlp_from_rbm-fold-4_of_4.cpu.pkl',
+    #     #'./saved/mlp_from_rbm-filtered-fold.cpu.pkl']
+
+    # ave_acc = []
+    # confusion_matrices = []
+
+    # for model_file in model_files:        
+
+    #     # get model
+    #     model = serial.load(model_file)  
+
+    #     # get dataset fold used for training from model's yaml_src
+    #     p = re.compile(r"which_set.*'(train)'")
+    #     dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
+    #     dataset = yaml_parse.load(dataset_yaml)
+
+    #     _, confusion = file_misclass_error(model, dataset)
         
-        confusion_matrices.append(augment_confusion_matrix(confusion))
+    #     confusion = confusion.transpose() # use true columns (instead of true rows)
 
-    # average confusions across folds
-    confusion_matrices = np.array(confusion_matrices)
+    #     acc = 100 * np.sum(np.diag(confusion)) / np.sum(confusion)
+    #     ave_acc.append(acc)
 
-    plt.ion()
-    plot_ave_conf_mat(confusion_matrices)
+    #     if 0:
+    #         plt.ion()
+    #         plot_conf_mat(confusion, title='')
+
+    #         save_file =  os.path.splitext(os.path.splitext(model_file)[0])[0] + '.pdf'
+    #         plt.savefig(save_file, format='pdf')
+        
+    #     confusion_matrices.append(augment_confusion_matrix(confusion))
+
+    # # average confusions across folds
+    # confusion_matrices = np.array(confusion_matrices)
+
+    # plt.ion()
+    # plot_ave_conf_mat(confusion_matrices)
 
     # mlp_ave = np.mean(ave_acc[:4])
     # mlp_std = np.std(ave_acc[:4])
