@@ -27,7 +27,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
     iterator = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
 
     # compute feature representation, aggregrate frames
-    X=[]; y=[];
+    X=[]; y=[]; Z=[];
     for n,el in enumerate(iterator):
         # display progress indicator
         sys.stdout.write('Aggregation progress: %2.0f%%\r' % (100*n/float(n_examples)))
@@ -36,6 +36,8 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
         input_data  = np.array(el[0], dtype=np.float32)
         output_data = fprop(input_data)
         feats = np.hstack([output_data[i] for i in which_layers])
+        
+        Z.append(np.sum(output_data[-1], axis=0))
 
         # aggregate features
         mean=[]; std=[]
@@ -54,7 +56,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
         y.append(true_label)
 
     print '' # newline
-    return X, y
+    return X, y, Z
 
 def get_features(model, dataset, which_layers=[2]):
     assert np.max(which_layers) < len(model.layers)
@@ -72,7 +74,7 @@ def get_features(model, dataset, which_layers=[2]):
     data_specs = (CompositeSpace((feat_space, target_space)), ("songlevel-features", "targets"))     
     iterator = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
     
-    X=[]; y=[];
+    X=[]; y=[]; Z=[];
     for n,el in enumerate(iterator):
         # display progress indicator
         sys.stdout.write('Getting features: %2.0f%%\r' % (100*n/float(n_examples)))
@@ -82,6 +84,7 @@ def get_features(model, dataset, which_layers=[2]):
         output_data = fprop(input_data)
         feats = np.hstack([output_data[i] for i in which_layers])
 
+        Z.append(np.sum(output_data[-1], axis=0))
         X.append(feats)
 
         labels = np.argmax(el[1], axis=1)
@@ -91,7 +94,7 @@ def get_features(model, dataset, which_layers=[2]):
 
         y.append(true_label)
     print ''
-    return X,y
+    return X, y, Z
 
 def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     assert method in ['random_forest', 'linear_svm']
@@ -122,16 +125,16 @@ def test_classifier(X_test, y_test, classifier, n_labels=10):
     print "classification accuracy:", ave_acc
     return confusion
 
-def test_classifier_printf(X_test, file_list, classifier, save_file, n_labels=10):
+def test_classifier_printf(X_test, y_test, Z_test, file_list, classifier, save_file, n_labels=10):
     n_examples = len(file_list)
     with open(save_file, 'w') as f:
-        for n, (X, fname) in enumerate(zip(X_test, file_list)):
+        for n, (X, true_label, Z, fname) in enumerate(zip(X_test, y_test, Z_test, file_list)):
             sys.stdout.write('Classify progress: %2.0f%%\r' % (100*n/float(n_examples)))
             sys.stdout.flush()
 
             y_pred = np.array(classifier.predict(X), dtype='int')
             pred_label = np.argmax(np.bincount(y_pred, minlength=n_labels))
-            f.write('{0} {1}\n'.format(fname, pred_label))
+            f.write('{0}\t{1}\t{2}\t{3}\n'.format(fname, true_label, pred_label, Z))
         print ''
 
 if __name__ == "__main__":
@@ -173,9 +176,9 @@ if __name__ == "__main__":
     testset  = yaml_parse.load(testset_yaml)
 
     if args.aggregate_features:
-        X_train, y_train = aggregate_features(model, trainset, which_layers=args.which_layers)
+        X_train, y_train, Z_train = aggregate_features(model, trainset, which_layers=args.which_layers)
     else:
-        X_train, y_train = get_features(model, trainset, which_layers=args.which_layers)
+        X_train, y_train, Z_train = get_features(model, trainset, which_layers=args.which_layers)
 
     # train data
     y_train = np.hstack([y*np.ones(len(X)) for X,y in zip(X_train, y_train)]) # upsample y (one label for each aggregated frame, instead of one label per song)
@@ -183,9 +186,9 @@ if __name__ == "__main__":
     
     # test data
     if args.aggregate_features:
-        X_test, y_test = aggregate_features(model, testset, which_layers=args.which_layers)
+        X_test, y_test, Z_test = aggregate_features(model, testset, which_layers=args.which_layers)
     else:
-        X_test, y_test = get_features(model, testset, which_layers=args.which_layers)
+        X_test, y_test, Z_test = get_features(model, testset, which_layers=args.which_layers)
         
     print 'Training classifier'
     classifier = train_classifier(X_train, y_train, method='random_forest')    
@@ -195,7 +198,7 @@ if __name__ == "__main__":
 
     print 'Testing classifier'
     if args.save_file:    
-        test_classifier_printf(X_test, [os.path.split(file_list[i])[-1] for i in file_numbers], classifier, args.save_file)
+        test_classifier_printf(X_test, y_test, Z_test, [os.path.split(file_list[i])[-1] for i in file_numbers], classifier, args.save_file)
 
         print 'Saving trained classifier'
         with open(os.path.splitext(args.save_file)[0] + '.pkl', 'w') as f:
