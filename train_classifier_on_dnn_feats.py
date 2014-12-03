@@ -196,10 +196,13 @@ if __name__ == "__main__":
     print 'Testing classifier'
     if args.save_file:    
         test_classifier_printf(X_test, [os.path.split(file_list[i])[-1] for i in file_numbers], classifier, args.save_file)
+
+        print 'Saving trained classifier'
+        with open(os.path.splitext(args.save_file)[0] + '.pkl', 'w') as f:
+            cPickle.dump(classifier, f)
+
     else:
         confusion = test_classifier(X_test, y_test, classifier)
 
-    print 'Saving trained classifier'
-    with open(os.path.splitext(args.save_file)[0] + '.pkl', 'w') as f:
-        cPickle.dump(classifier, f)
+
 
