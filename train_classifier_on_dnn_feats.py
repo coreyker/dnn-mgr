@@ -2,6 +2,7 @@ import os, sys, re, cPickle
 import numpy as np
 import theano
 
+from sklearn.externals import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from pylearn2.utils import serial
@@ -101,7 +102,7 @@ def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     
     # train classifier
     if method=='random_forest':
-        classifier = RandomForestClassifier(n_estimators=500, random_state=1234, verbose=verbose)
+        classifier = RandomForestClassifier(n_estimators=500, random_state=1234, verbose=verbose, n_jobs=2)
     else:
         classifier = SVC(C=0.5, kernel='linear', random_state=1234, verbose=verbose)
 
@@ -134,7 +135,9 @@ def test_classifier_printf(X_test, y_test, Z_test, file_list, classifier, save_f
 
             y_pred = np.array(classifier.predict(X), dtype='int')
             pred_label = np.argmax(np.bincount(y_pred, minlength=n_labels))
-            f.write('{0}\t{1}\t{2}\t{3}\n'.format(fname, true_label, pred_label, Z))
+            s=''
+            for i in Z: s+='%2.2f\t'%i
+            f.write('{0}\t{1}\t{2}\t{3}\n'.format(fname, true_label, pred_label, s))
         print ''
 
 if __name__ == "__main__":
@@ -150,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('dataset_dir', help='Path to dataset files (single directory with no subfolders)')
     parser.add_argument('--which_layers', nargs='*', type=int, help='List of which DNN layers to use as features')
     parser.add_argument('--aggregate_features', action='store_true', help='option to aggregate frames (mean/std of frames used to train classifier)')
-    parser.add_argument('--save_file', help='Output classification results to a text file')
+    parser.add_argument('--save_folder', help='Output classification results to a text file')
 
     args = parser.parse_args()
     
@@ -197,15 +200,19 @@ if __name__ == "__main__":
     file_numbers = testset.raw.file_list
 
     print 'Testing classifier'
-    if args.save_file:    
-        test_classifier_printf(X_test, y_test, Z_test, [os.path.split(file_list[i])[-1] for i in file_numbers], classifier, args.save_file)
+    if args.save_folder:    
+        if not os.path.exists(args.save_folder):
+            os.mkdir(args.save_folder)
+
+        fname = os.path.split(args.save_folder)[-1]
+        test_classifier_printf(X_test, y_test, Z_test, [os.path.split(file_list[i])[-1] for i in file_numbers], classifier, os.path.join(args.save_folder, fname+'.txt'))
 
         print 'Saving trained classifier'
-        with open(os.path.splitext(args.save_file)[0] + '.pkl', 'w') as f:
-            cPickle.dump(classifier, f)
+        #with open(fname, 'w') as f:
+        #    cPickle.dump(classifier, f)
+
+        joblib.dump(classifier, os.path.join(args.save_folder, fname+'.pkl'))
 
     else:
         confusion = test_classifier(X_test, y_test, classifier)
-
-
 

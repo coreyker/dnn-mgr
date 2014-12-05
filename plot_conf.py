@@ -71,6 +71,7 @@ def save_conf_mat(confusion, title):
 
     plt.savefig(title + '.pdf', format='pdf')
     plt.close()
+    return augmented_confusion[-1,-1]
     
 def plot_ave_conf_mat(confusion_matrices, title):
     
@@ -140,12 +141,15 @@ if __name__ == '__main__':
         ''')
     
     parser.add_argument('--file', nargs='*', help='File(s) listing file name and class for each test file')
+    parser.add_argument('--summary')
+
     args = parser.parse_args()
 
     # tabulate confusions
     n_classes = 10
     classes = {'blues':0, 'classical':1, 'country':2, 'disco':3, 'hiphop':4, 'jazz':5, 'metal':6, 'pop':7, 'reggae':8, 'rock':9}    
-
+    
+    ave_acc = []
     for f in args.file:
         
         confusion = np.zeros((n_classes, n_classes))
@@ -155,10 +159,16 @@ if __name__ == '__main__':
         for l in lines:
             s = l.split() 
             true_class = classes[s[0].split('.')[0]]
-            pred_class = int(s[-1])
+            pred_class = int(s[2])
             confusion[pred_class, true_class] += 1
 
-        save_conf_mat(confusion, os.path.splitext(f)[0])
+        ave = save_conf_mat(confusion, os.path.splitext(f)[0])
+        ave_acc.append([f, ave])
+
+    if args.summary:
+        with open(args.summary, 'w') as f:
+            for l in ave_acc:
+                f.write('{}\t{}\n'.format(*l))
 
     # #_, model_file = sys.argv
     # model_files = ['./saved/mlp_rlu-fold-1_of_4.cpu.pkl',
