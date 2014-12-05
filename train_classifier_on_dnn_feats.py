@@ -211,7 +211,7 @@ if __name__ == "__main__":
         #with open(fname, 'w') as f:
         #    cPickle.dump(classifier, f)
 
-        joblib.dump(classifier, os.path.join(args.save_folder, fname+'.pkl'))
+        joblib.dump(classifier, os.path.join(args.save_folder, fname+'.pkl'), 9)
 
     else:
         confusion = test_classifier(X_test, y_test, classifier)
