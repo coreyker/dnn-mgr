@@ -59,9 +59,10 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
     print '' # newline
     return X, y, Z
 
-def get_features(model, dataset, which_layers=[2]):
+def get_features(model, dataset, which_layers=[2], n_features=100):
     assert np.max(which_layers) < len(model.layers)
 
+    rng = np.random.RandomState(111)
     X = model.get_input_space().make_theano_batch()
     Y = model.fprop(X, return_all=True)
     fprop = theano.function([X],Y)
@@ -82,8 +83,12 @@ def get_features(model, dataset, which_layers=[2]):
         sys.stdout.flush()
 
         input_data  = np.array(el[0], dtype=np.float32)
-        output_data = fprop(input_data)
+        output_data = fprop(input_data)        
         feats = np.hstack([output_data[i] for i in which_layers])
+
+        if n_features:
+            ind   = rng.permutation(feats.shape[0])
+            feats = feats[ind[:n_features],:]
 
         Z.append(np.sum(output_data[-1], axis=0))
         X.append(feats)
