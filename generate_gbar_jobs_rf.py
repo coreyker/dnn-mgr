@@ -25,7 +25,7 @@ module load python/2.7.3 cuda/6.5
 export LD_LIBRARY_PATH=~/.local/lib:$LD_LIBRARY_PATH
 source ~/venv/bin/activate
 cd /SCRATCH/cmke/dnn-mgr
-python train_classifier_on_dnn_feats.py {model_file} {dataset_dir} --which_layers {which_layers} --save_file {savename} {aggregate_features}
+python train_classifier_on_dnn_feats.py {model_file} {dataset_dir} --which_layers {which_layers} --save_folder {save_folder} {aggregate_features}
 '''.format
 
 model_files  = ['S_50_RS.pkl', 'S_50_RSD.pkl', 'S_500_RS.pkl', 'S_500_RSD.pkl', 'F_50_RS.pkl', 'F_50_RSD.pkl', 'F_500_RS.pkl', 'F_500_RSD.pkl']
@@ -56,7 +56,7 @@ for agg in aggregate_features:
 										model_file=os.path.join('./saved', model), 
 										dataset_dir=dataset_dir, 
 										which_layers=l, 
-										savename=os.path.join('./saved', savename+'.txt'), 
+										save_folder=os.path.join('./saved', savename), 
 										aggregate_features=agg) )
 
 with open('_master_RF_trainer.sh', 'w') as f:
