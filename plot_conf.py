@@ -133,7 +133,8 @@ def augment_confusion_matrix(confusion):
 
 if __name__ == '__main__':
 
-    #ex: python plot_conf.py --file ./saved/*.txt
+    #ex1: python plot_conf.py --file ./saved/*.txt
+    #ex2: python plot_conf.py --summary ./saved/RF_500/RF_500_summary.txt --file `find ./saved/RF_500/ -name "*.txt" -print`
     import argparse
     
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
