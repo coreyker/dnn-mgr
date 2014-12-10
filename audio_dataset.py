@@ -14,14 +14,15 @@ from pylearn2.datasets import control
 from pylearn2.utils.exc import reraise_as
 from pylearn2.utils.rng import make_np_rng
 from pylearn2.utils import contains_nan
-from pylearn2.models.mlp import MLP, Linear
+from pylearn2.models.mlp import MLP, Linear, PretrainedLayer
+from pylearn2.models.autoencoder import Autoencoder
 
 from theano import config
 
 import pdb
 
 class AudioDataset(DenseDesignMatrixPyTables):
-    def __init__(self, config, which_set='train', standardize=True, pca_whitening=False, ncomponents=None, epsilon=3):
+    def __init__(self, config, which_set='train'): #, standardize=True, pca_whitening=False, ncomponents=None, epsilon=3):
 
         keys = ['train', 'test', 'valid']
         assert which_set in keys
@@ -256,11 +257,9 @@ class PreprocLayer(PretrainedLayer):
         
         proc_type: type of preprocessing (either standardize or pca_whiten)
         
-        **kwargs list of key words and their arguments
-        
         if proc_type='standardize' no extra arguments required
 
-        if proc_type='pca_whiten' the following arguments are required:
+        if proc_type='pca_whiten' the following keyword arguments are required:
             ncomponents = x where x is an integer
             epsilon = y where y is a float (regularization parameter)
         '''
@@ -274,28 +273,30 @@ class PreprocLayer(PretrainedLayer):
         self.tframes = config['tframes']
         nvis = len(self.mean)
 
-        if proc_type is 'standardize':
-            dim = nvis
-            biases  = np.array(-self.mean/self.var, dtype=np.float32)
-            weights = np.diag(np.reciprocal(self.var), dtype=np.float32)
-        
-        if proc_type is 'pca_whiten':
-            dim = kwargs['ncomponents']
-            S = config['S'][:dim]   # eigenvalues
-            U = config['U'][:,:dim] # eigenvectors            
+        if proc_type == 'standardize':
+            dim      = nvis
+            biases   = np.array(-self.mean/self.var, dtype=np.float32)
+            weights  = np.array(np.diag(np.reciprocal(self.var)), dtype=np.float32)
+            
+        if proc_type == 'pca_whiten':
+            dim      = kwargs['ncomponents']
+            S        = config['S'][:dim]   # eigenvalues
+            U        = config['U'][:,:dim] # eigenvectors            
             self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)
+            
+            biases   = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
+            weights  = np.array(self.pca.transpose(), dtype=np.float32)
 
-            biases  = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
-            weights = np.array(self.pca.transpose(), dtype=np.float32)
+        # Autoencoder with linear units
+        pre_layer = Autoencoder(nvis=nvis, nhid=dim, act_enc=None, act_dec=None, irange=0)
+        
+        # Set weights for pre-processing
+        params    = pre_layer.get_param_values()
+        params[1] = biases
+        params[2] = weights
+        pre_layer.set_param_values(params)
 
-        # create linear layer to take care of pre-processing
-        pre_layer = Linear(dim=self.ncomponents, layer_name='pre', irange=0, W_lr_scale=0, b_lr_scale=0)
-        pre_model = MLP(nvis=nvis, layers=[preproc_layer]) # define input layer
-
-        pre_layer.set_biases(biases)
-        pre_layer.set_weights(weights)
-
-        super(PreprocLayer, self).__init__(layer_name='pre', layer_content=pre_model, freeze_params=True)        
+        super(PreprocLayer, self).__init__(layer_name='pre', layer_content=pre_layer, freeze_params=True)        
 
 if __name__=='__main__':
 

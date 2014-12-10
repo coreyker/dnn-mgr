@@ -10,8 +10,9 @@ if __name__=="__main__":
 	''')
 
 	parser.add_argument('fold_config', help='Path to dataset partition configuration file (generated with prepare_dataset.py)')
+	parser.add_argument('yaml_file')
 	parser.add_argument('--nunits', type=int, help='Number of units in each hidden layer')
-	parser.add_argument('--dropout', action='store_true', help='Set this flag if you want to use dropout regularization')
+	# parser.add_argument('--dropout', action='store_true', help='Set this flag if you want to use dropout regularization')
 	parser.add_argument('--output', help='Name of output model')
 	args = parser.parse_args()
 
@@ -20,12 +21,12 @@ if __name__=="__main__":
 	if args.output is None:
 		parser.error('Please specify the name that the trained model file should be saved as (.pkl file)')
 
-	if args.dropout:
-		print 'Using dropout'
-		yaml_base_file = 'mlp_rlu_dropout.yaml'
-	else:
-		print 'Not using dropout'
-		yaml_base_file = 'mlp_rlu.yaml'
+	# if args.dropout:
+	# 	print 'Using dropout'
+	# 	yaml_file = 'mlp_rlu_dropout.yaml'
+	# else:
+	# 	print 'Not using dropout'
+	# 	yaml_file = 'mlp_rlu.yaml'
 
 	hyper_params = { 'dim_h0' : args.nunits,
 		'dim_h1' : args.nunits,
@@ -35,7 +36,7 @@ if __name__=="__main__":
 		'save_path'	: '/tmp/save.pkl'
 	}
 
-	with open(yaml_base_file) as f:
+	with open(args.yaml_file) as f:
 		train_yaml = f.read()
 
 	train_yaml = train_yaml % (hyper_params)
