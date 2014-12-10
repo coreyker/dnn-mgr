@@ -1,0 +1,75 @@
+!obj:pylearn2.train.Train {
+    dataset : &trainset !obj:audio_dataset.AudioDataset {
+        which_set : 'train',
+        config : &fold !pkl: "%(fold_config)s"
+    },
+    model : !obj:pylearn2.models.mlp.MLP {
+        nvis : 513,
+        layers : [
+            !obj:audio_dataset.PreprocLayer {
+                config : *fold,
+                proc_type : 'standardize'
+                },
+            !obj:pylearn2.models.mlp.RectifiedLinear {
+                layer_name : 'h0',
+                dim : %(dim_h0)i,
+                irange : &irange .1
+                },
+            !obj:pylearn2.models.mlp.RectifiedLinear {
+                layer_name : 'h1',
+                dim : %(dim_h1)i,
+                irange : *irange
+                },
+            !obj:pylearn2.models.mlp.RectifiedLinear {
+                layer_name : 'h2',
+                dim : %(dim_h2)i,
+                irange : *irange
+                },
+            !obj:pylearn2.models.mlp.Softmax {
+                n_classes : 10,
+                layer_name : 'y',
+                irange : *irange
+                }
+            ]
+    },
+    algorithm : !obj:pylearn2.training_algorithms.sgd.SGD {
+        learning_rate : .01,
+        learning_rule : !obj:pylearn2.training_algorithms.learning_rule.Momentum {
+            init_momentum : 0.5
+        },
+        train_iteration_mode : 'shuffled_sequential', #'batchwise_shuffled_sequential',
+        monitor_iteration_mode : 'sequential', #'batchwise_shuffled_sequential',
+        #batches_per_iter : 500,
+        batch_size : 1200,
+        monitoring_dataset : {
+            'train' : *trainset,
+            'valid' : !obj:audio_dataset.AudioDataset {
+                which_set : 'valid',
+                config : *fold
+            }
+        },
+        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
+            channel_name : 'valid_y_misclass',
+            prop_decrease : .001,
+            N: 10
+        }#,cost : !obj:pylearn2.costs.mlp.Default {}
+    },
+    extensions: [
+        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+             channel_name: 'valid_y_misclass',
+             save_path: "%(best_model_save_path)s"
+        },
+        !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
+            start: 1,
+            saturate: 50,
+            final_momentum: .9
+        },
+        !obj:pylearn2.training_algorithms.sgd.LinearDecayOverEpoch {
+            start: 1,
+            saturate: 50,
+            decay_factor: .01
+        },
+    ],
+    save_path : "%(save_path)s",
+    save_freq : 1
+}

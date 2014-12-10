@@ -12,6 +12,7 @@ def collect_audio(root_directory, label_list):
 	'''
 	Find all audio files in the given directory and subdirectories. 
 	Associate each file with a label:
+
 	1. If the file resides in a directory whos name is in the label_list, apply that label
 	2. If the file's name contains a label from the label list, apply that label
 	
@@ -200,7 +201,7 @@ def create_partiton_from_files(hdf5, partition_save_name, train_file, valid_file
 
 	create_partition(hdf5, partition_save_name, train_list, valid_list, test_list, tframes)
 
-def create_partition(hdf5, partition_save_name, train_list, valid_list, test_list, tframes):
+def create_partition(hdf5, partition_save_name, train_list, valid_list, test_list, tframes=1, pca=False):
 	
 	if os.path.exists(partition_save_name):
 		warnings.warn('partition file %s already exists, new file will not be created' % partition_save_name)
@@ -249,36 +250,39 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list, test_lis
 	var  = (sum_x2 - sum_x**2/nsamples)/(nsamples-1)
 
 	# compute PCA whitening matrix
-	XX = 0
-	for n,i in enumerate(train_support):
-		sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
-		sys.stdout.flush()
-		for j in xrange(tframes):						
-			
-			fft_frame = data.X[i+j,:]
-			X = np.reshape(fft_frame - mean, (len(fft_frame), 1))
-			XX += X.dot(X.T)
-	print ''
-	XX /= nsamples
+	if pca:
+		XX = 0
+		for n,i in enumerate(train_support):
+			sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
+			sys.stdout.flush()
+			for j in xrange(tframes):						
+				
+				fft_frame = data.X[i+j,:]
+				X = np.reshape(fft_frame - mean, (len(fft_frame), 1))
+				XX += X.dot(X.T)
+		print ''
+		XX /= nsamples
 
-	U,S,V = np.linalg.svd(XX)
+		U,S,V = np.linalg.svd(XX)
+	else
+		U=None; S=None; V=None
 
 	config = {
-		'hdf5': hdf5,
-		'test':  test_support, 
-		'train': train_support, 
-		'valid': valid_support,
+		'hdf5' : hdf5,
+		'test' :  test_support, 
+		'train' : train_support, 
+		'valid' : valid_support,
 		'train_files' : train_list,
 		'valid_files' : valid_list,
 		'test_files' : test_list,
-		'mean':  mean,
-		'var':   var,
+		'mean' :  mean,
+		'var' :   var,
 		'tframes' : tframes,
 		'U' : U,
 		'S' : S
 		}
 
-	# pickle config		
+    # pickle config		
 	with open(partition_save_name, 'w') as f:
 		cPickle.dump(config, f, protocol=2)
 	

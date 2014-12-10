@@ -14,6 +14,8 @@ from pylearn2.datasets import control
 from pylearn2.utils.exc import reraise_as
 from pylearn2.utils.rng import make_np_rng
 from pylearn2.utils import contains_nan
+from pylearn2.models.mlp import MLP, Linear
+
 from theano import config
 
 import pdb
@@ -41,27 +43,35 @@ class AudioDataset(DenseDesignMatrixPyTables):
         self.var       = config['var']
         self.tframes   = config['tframes']
 
-        if (standardize is True) and (pca_whitening is True):
-            raise ValueError("'standardize' and 'pca_whiten' cannot both be True")
+        # if (standardize is True) and (pca_whitening is True):
+        #     raise ValueError("'standardize' and 'pca_whiten' cannot both be True")
         
-        if ncomponents is None:
-            self.ncomponents = len(self.mean)
-        else:
-            assert ncomponents <= len(self.mean)
-            self.ncomponents = ncomponents
+        # if ncomponents is None:
+        #     self.ncomponents = len(self.mean)
+        # else:
+        #     assert ncomponents <= len(self.mean)
+        #     self.ncomponents = ncomponents
 
-        if (pca_whitening is True):
-            S = config['S'][:self.ncomponents]   # eigenvalues
-            U = config['U'][:,:self.ncomponents] # eigenvectors            
-            self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T) 
+        # if (pca_whitening is True):
+        #     S = config['S'][:self.ncomponents]   # eigenvalues
+        #     U = config['U'][:,:self.ncomponents] # eigenvectors            
+        #     self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T) 
 
+        # # create linear layer to take care of pre-processing (e.g., standardization or whitening)
+        # pre_layer = Linear(dim=self.ncomponents, layer_name='pre', irange=0, W_lr_scale=0, b_lr_scale=0)
+        # m = MLP(nvis=self.nfft//2+1, layers=[preproc_layer]) # define input layer
 
-        if standardize is True:
-            self.transform = lambda X: (X-self.mean)/self.var
-        elif pca_whitening is True:
-            self.transform = lambda X: (X-self.mean).dot(self.pca.transpose())
-        else:
-            self.transform = lambda X: X
+        # if standardize is True:
+        #     pre_layer.set_biases(np.array(-self.mean/self.var, dtype=np.float32))
+        #     pre_layer.set_weights(np.diag(np.reciprocal(self.var), dtype=np.float32))
+        #     # self.transform = lambda X: (X-self.mean)/self.var
+        # elif pca_whitening is True:
+        #     pre_layer.set_biases(np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32))
+        #     pre_layer.set_weights(np.array(self.pca.transpose(), dtype=np.float32))
+        #     #self.transform = lambda X: (X-self.mean).dot(self.pca.transpose())
+        # else:
+        #     pass
+        #     #self.transform = lambda X: X
 
         super(AudioDataset, self).__init__(X=data.X, y=data.y)
     
@@ -176,7 +186,8 @@ class FramelevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:
-                    X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )                                    
+                    #X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )
+                    X = data[index:index+self._dataset.tframes, :]
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
 
@@ -223,7 +234,8 @@ class SonglevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:
-                    X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )                                    
+                    #X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )
+                    X = data[index:index+self._dataset.tframes, :]
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
 
@@ -236,6 +248,54 @@ class SonglevelIterator(FiniteDatasetIterator):
         if not self._return_tuple and len(rval) == 1:
             rval, = rval
         return rval
+
+class PreprocLayer(PretrainedLayer):
+    def __init__(self, config, proc_type='standardize', **kwargs):
+        '''
+        config: dictionary with partition configuration information
+        
+        proc_type: type of preprocessing (either standardize or pca_whiten)
+        
+        **kwargs list of key words and their arguments
+        
+        if proc_type='standardize' no extra arguments required
+
+        if proc_type='pca_whiten' the following arguments are required:
+            ncomponents = x where x is an integer
+            epsilon = y where y is a float (regularization parameter)
+        '''
+
+        recognized_types = ['standardize', 'pca_whiten']
+        assert proc_type in recognized_types
+
+        # load parition information
+        self.mean    = config['mean']
+        self.var     = config['var']
+        self.tframes = config['tframes']
+        nvis = len(self.mean)
+
+        if proc_type is 'standardize':
+            dim = nvis
+            biases  = np.array(-self.mean/self.var, dtype=np.float32)
+            weights = np.diag(np.reciprocal(self.var), dtype=np.float32)
+        
+        if proc_type is 'pca_whiten':
+            dim = kwargs['ncomponents']
+            S = config['S'][:dim]   # eigenvalues
+            U = config['U'][:,:dim] # eigenvectors            
+            self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)
+
+            biases  = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
+            weights = np.array(self.pca.transpose(), dtype=np.float32)
+
+        # create linear layer to take care of pre-processing
+        pre_layer = Linear(dim=self.ncomponents, layer_name='pre', irange=0, W_lr_scale=0, b_lr_scale=0)
+        pre_model = MLP(nvis=nvis, layers=[preproc_layer]) # define input layer
+
+        pre_layer.set_biases(biases)
+        pre_layer.set_weights(weights)
+
+        super(PreprocLayer, self).__init__(layer_name='pre', layer_content=pre_model, freeze_params=True)        
 
 if __name__=='__main__':
 
