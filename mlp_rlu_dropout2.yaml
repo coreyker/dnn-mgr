@@ -33,7 +33,7 @@
             ]
     },
     algorithm : !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : .01,
+        learning_rate : .1,
         learning_rule : !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum : 0.5
         },
@@ -52,7 +52,12 @@
             channel_name : 'valid_y_misclass',
             prop_decrease : .001,
             N: 10
-        }#,cost : !obj:pylearn2.costs.mlp.Default {}
+        },
+        cost: !obj:pylearn2.costs.mlp.dropout.Dropout { 
+            default_input_include_prob : .75,
+            input_include_probs: { 'h0' : .8 },
+            input_scales: { 'h0': 1. }
+        }
     },
     extensions: [
         !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
@@ -68,7 +73,7 @@
             start: 1,
             saturate: 50,
             decay_factor: .01
-        },
+        }
     ],
     save_path : "%(save_path)s",
     save_freq : 1

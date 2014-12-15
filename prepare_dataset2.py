@@ -57,6 +57,7 @@ def collect_audio(root_directory, label_list):
     os.chdir(pwd)
 
     for key in file_dict:
+        file_dict[key] = sorted(file_dict[key])
         print 'Found %d audio files with label %s' % (len(file_dict[key]), key)
 
     return file_dict
@@ -83,10 +84,10 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
 
     file_index = {}
     offset = 0
-    for target, key in zip(targets, file_dict):
+    for target, key in zip(targets, label_list):
         print 'Processing %s' % key
 
-        for f in file_dict[key]:
+        for f in file_dict[key.lower()]:
             
             if f.endswith('.wav'):
                 read_fun = audiolab.wavread             
@@ -114,7 +115,7 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
             data_node.y.append(one_hot)
 
             # keep file-level info
-            file_index[f] = (offset, nframes, key, target)
+            file_index[f] = (offset, nframes, key.lower(), target)
             offset += nframes
 
             hdf5_file.flush()
@@ -142,7 +143,7 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
     hdf5_file.close()
     print '' # newline
 
-def create_stratified_partition(hdf5, partition_save_prefix, train_prop=0.5, valid_prop=0.25, test_prop=0.25, tframes=1):
+def create_stratified_partition(hdf5, partition_save_prefix, train_prop=0.5, valid_prop=0.25, test_prop=0.25, tframes=1, compute_std=True, compute_pca=False):
     
     nfolds = int(np.reciprocal(test_prop))
 
@@ -193,23 +194,31 @@ def create_stratified_partition(hdf5, partition_save_prefix, train_prop=0.5, val
             warnings.warn('partition file {} already exists, new file will not be created'.format(partition_save_name))
             continue
         else:       
-            create_partition(hdf5, partition_save_name, train, valid, test, tframes)
+            create_partition(hdf5, partition_save_name, train, valid, test, tframes, compute_std, compute_pca)
             print 'Created stratified partition %s' % partition_save_name
     
     hdf5_file.close()
 
-def create_partiton_from_files(hdf5, partition_save_name, train_file, valid_file, test_file, tframes=1):
+def create_partiton_from_files(hdf5, partition_save_name, train_file, valid_file, test_file, tframes=1, compute_std=True, compute_pca=False):
     
     with open(train_file) as f: 
         train_list = [line.strip() for line in f.readlines()]
-    with open(valid_file) as f: 
-        valid_list = [line.strip() for line in f.readlines()]
-    with open(test_file) as f:  
-        test_list = [line.strip() for line in f.readlines()]
 
-    create_partition(hdf5, partition_save_name, train_list, valid_list, test_list, tframes)
+    if valid_file:
+        with open(valid_file) as f: 
+            valid_list = [line.strip() for line in f.readlines()]
+    else:
+        valid_list = None
 
-def create_partition(hdf5, partition_save_name, train_list, valid_list=None, test_list=None, tframes=1, pca=False):
+    if test_file:
+        with open(test_file) as f:  
+            test_list = [line.strip() for line in f.readlines()]
+    else:
+        test_list = None
+
+    create_partition(hdf5, partition_save_name, train_list, valid_list, test_list, tframes, compute_std, compute_pca)
+
+def create_partition(hdf5, partition_save_name, train_list, valid_list=None, test_list=None, tframes=1, compute_std=True, compute_pca=False):
     
     if os.path.exists(partition_save_name):
         warnings.warn('partition file %s already exists, new file will not be created' % partition_save_name)
@@ -245,25 +254,29 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     test_support = np.hstack(test_support)
 
     # compute mean and std for training set only
-    sum_x  = np.zeros(nfeats, dtype=np.float32)
-    sum_x2 = np.zeros(nfeats, dtype=np.float32)
-    nsamples = len(train_support)*tframes
-    
-    for n,i in enumerate(train_support):
-        sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
-        sys.stdout.flush()
-        for j in xrange(tframes):                       
-            
-            fft_frame = data.X[i+j,:]
-            sum_x  += fft_frame
-            sum_x2 += fft_frame**2
-    print ''
+    if compute_std:
+        sum_x  = np.zeros(nfeats, dtype=np.float32)
+        sum_x2 = np.zeros(nfeats, dtype=np.float32)
+        nsamples = len(train_support)*tframes
+        
+        for n,i in enumerate(train_support):
+            sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
+            sys.stdout.flush()
+            for j in xrange(tframes):                       
+                
+                fft_frame = data.X[i+j,:]
+                sum_x  += fft_frame
+                sum_x2 += fft_frame**2
+        print ''
 
-    mean = sum_x / nsamples
-    var  = (sum_x2 - sum_x**2/nsamples)/(nsamples-1)
+        mean = sum_x / nsamples
+        var  = (sum_x2 - sum_x**2/nsamples)/(nsamples-1)
+    else:
+        mean = np.zeros(nfeats)
+        var  = np.ones(nfeats)
 
     # compute PCA whitening matrix
-    if pca:
+    if compute_pca:
         XX = 0
         for n,i in enumerate(train_support):
             sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
@@ -278,7 +291,8 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
 
         U,S,V = np.linalg.svd(XX)
     else:
-        U=None; S=None; V=None
+        S = np.eye(nfeats)
+        U = np.eye(nfeats)
 
     config = {
         'hdf5' : hdf5,
@@ -327,6 +341,8 @@ if __name__=='__main__':
 
     parser.add_argument('--partition_name')
     parser.add_argument('--tframes', type=int)
+    parser.add_argument('--compute_pca', action='store_true')
+    parser.add_argument('--compute_std', action='store_true')
 
     args = parser.parse_args()
     
@@ -338,9 +354,8 @@ if __name__=='__main__':
     and (args.train_prop is not None or args.valid_prop is not None or args.test_prop is not None):
         parser.error('either specify user supplied files with --train, --valid, --test, OR specify or use --train_prop, --valid_prop, --test_prop to automatically generate stratified partitions')
 
-    if (args.train is not None or args.valid is not None or args.test is not None) \
-    and (args.train is None or args.valid is None or args.test is None):
-        parser.error('if any of the flags --train, --valid, --test are specified, then they all must be specified')
+    if (args.train is None and args.valid is not None and args.test is not None):
+        parser.error('if any of the flags --valid, --test are specified, then --train must be specified too')
 
     if (args.train_prop is not None or args.valid_prop is not None or args.test_prop is not None) \
     and (args.train_prop is None or args.valid_prop is None or args.test_prop is None):
@@ -373,9 +388,22 @@ if __name__=='__main__':
 
     if args.train is not None:
         'Print creating partition %s from files %s, %s, %s' % (args.partition_name, args.train, args.valid, args.test)
-        create_partiton_from_files(args.hdf5, args.partition_name, args.train, args.valid, args.test, args.tframes)
-    
+        create_partiton_from_files(hdf5=args.hdf5, 
+            partition_save_name=args.partition_name, 
+            train_file=args.train, 
+            valid_file=args.valid, 
+            test_file=args.test, 
+            tframes=args.tframes, 
+            compute_std=args.compute_std, 
+            compute_pca=args.compute_pca)
+
     elif args.train_prop is not None:
         'Print creating stratified partitions'
-        create_stratified_partition(args.hdf5, args.partition_name, args.train_prop, args.valid_prop, args.test_prop, args.tframes)
-
+        create_stratified_partition(hdf5=args.hdf5, 
+            partition_save_prefix=args.partition_name, 
+            train_prop=args.train_prop, 
+            valid_prop=args.valid_prop, 
+            test_prop=args.test_prop, 
+            tframes=args.tframes,
+            compute_std=args.compute_std, 
+            compute_pca=args.compute_pca)

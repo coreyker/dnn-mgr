@@ -216,9 +216,11 @@ class SonglevelIterator(FiniteDatasetIterator):
         next_file = self._dataset.file_list[ next_file_index ] # !!! added line to iterate over different index set !!!
         
         # lookup file's position in the hdf5 array
-        next_index = []
+        target_list = []
+        next_index  = []
         for f in next_file:
             offset, nframes, key, target = self._dataset.file_index[f]
+            target_list.append(target)
             next_index.append(offset + np.arange(nframes))
         next_index = np.hstack(next_index)
 
@@ -228,10 +230,11 @@ class SonglevelIterator(FiniteDatasetIterator):
 
         for data, fn, source in safe_izip(self._raw_data, self._convert, sources):
             if source=='targets':
-                if fn:
-                    output.append( fn(data[next_index, :]) )
-                else:
-                    output.append( data[next_index, :] )
+                # if fn:
+                #     output.append( fn( np.reshape(data[next_index[0], :], (1,-1)) ) )
+                # else:
+                #     output.append( np.reshape(data[next_index[0], :], (1,-1)) )
+                output.append( np.vstack(target_list) )
             else:
                 design_mat = []
                 for index in next_index:
@@ -269,14 +272,14 @@ class PreprocLayer(PretrainedLayer):
 
         # load parition information
         self.mean    = config['mean']
-        self.var     = config['var']
+        self.istd    = np.reciprocal(np.sqrt(config['var']))
         self.tframes = config['tframes']
         nvis = len(self.mean)
 
         if proc_type == 'standardize':
             dim      = nvis
-            biases   = np.array(-self.mean/self.var, dtype=np.float32)
-            weights  = np.array(np.diag(np.reciprocal(self.var)), dtype=np.float32)
+            biases   = np.array(-self.mean * self.istd, dtype=np.float32)
+            weights  = np.array(np.diag(self.istd), dtype=np.float32)
             
         if proc_type == 'pca_whiten':
             dim      = kwargs['ncomponents']
