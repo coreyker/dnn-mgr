@@ -56,7 +56,7 @@ def collect_audio(root_directory, label_list):
                     warnings.warn('Found audio file %s, but could not determine its label (please check that label is in filename or path)' % filename)
     os.chdir(pwd)
 
-    for key in file_dict:
+    for key in label_list:
         file_dict[key] = sorted(file_dict[key])
         print 'Found %d audio files with label %s' % (len(file_dict[key]), key)
 
