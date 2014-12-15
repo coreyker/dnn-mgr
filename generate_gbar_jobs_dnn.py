@@ -1,3 +1,5 @@
+import os
+
 jobscript = '''
 #!/bin/sh
 # embedded options to qsub - start with #PBS
