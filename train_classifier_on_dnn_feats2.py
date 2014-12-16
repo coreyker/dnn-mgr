@@ -146,7 +146,6 @@ if __name__ == "__main__":
         ''')
     
     parser.add_argument('model_file', help='Path to trained DNN model file')
-    parser.add_argument('dataset_dir', help='Path to dataset files (single directory with no subfolders)')
     parser.add_argument('--which_layers', nargs='*', type=int, help='List of which DNN layers to use as features')
     parser.add_argument('--aggregate_features', action='store_true', help='option to aggregate frames (mean/std of frames used to train classifier)')
     parser.add_argument('--save_file', help='Output classification results to a text file')
@@ -200,7 +199,7 @@ if __name__ == "__main__":
             save_file=args.save_file+'.txt')
 
         print 'Saving trained classifier'
-        joblib.dump(classifier, args.save_file+'.pkl'), 9)
+        joblib.dump(classifier, args.save_file+'.pkl', 9)
 
     else:
         confusion = test_classifier(X_test, y_test, classifier)
