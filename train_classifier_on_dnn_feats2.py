@@ -48,7 +48,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
         X.append(np.vstack(agg_feat))
         y.append(np.hstack([true_label] * len(agg_feat)))
         Z.append(np.sum(output_data[-1], axis=0)) 
-        file_list.append(e[2])
+        file_list.append(el[2])
 
     print '' # newline
     return X, y, Z, file_list
@@ -88,7 +88,7 @@ def get_features(model, dataset, which_layers=[2], n_features=500):
         X.append(feats)
         y.append([true_label]*n_features)
         Z.append(np.sum(output_data[-1], axis=0))
-        file_list.append(e[2])
+        file_list.append(el[2])
 
     print ''
     return X, y, Z, file_list
