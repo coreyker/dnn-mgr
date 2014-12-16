@@ -218,9 +218,11 @@ class SonglevelIterator(FiniteDatasetIterator):
         # lookup file's position in the hdf5 array
         target_list = []
         next_index  = []
+        file_list   = []
         for f in next_file:
             offset, nframes, key, target = self._dataset.file_index[f]
             target_list.append(target)
+            file_list.append(f)
             next_index.append(offset + np.arange(nframes))
         next_index = np.hstack(next_index)
 
@@ -247,7 +249,8 @@ class SonglevelIterator(FiniteDatasetIterator):
                     output.append( fn(design_mat) )
                 else:
                     output.append( design_mat )
-                    
+        
+        output.append(file_list)  
         rval = tuple(output)
         if not self._return_tuple and len(rval) == 1:
             rval, = rval
@@ -309,7 +312,7 @@ if __name__=='__main__':
     with open('/Users/cmke/Datasets/tzanetakis_genre/tzanetakis_genre-fold-1_of_4.pkl') as f: 
         config = cPickle.load(f)
     
-    D = AudioDataset(config, standardize=False, pca_whitening=True, ncomponents=50)
+    D = AudioDataset(config)
     
     feat_space   = VectorSpace(dim=D.ncomponents)    
     target_space = VectorSpace(dim=len(D.label_list))
