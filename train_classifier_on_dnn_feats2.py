@@ -53,7 +53,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
     print '' # newline
     return X, y, Z, file_list
 
-def get_features(model, dataset, which_layers=[2], n_features=500):
+def get_features(model, dataset, which_layers=[2], n_features=100):
     assert np.max(which_layers) < len(model.layers)
 
     rng = np.random.RandomState(111)
