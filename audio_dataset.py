@@ -3,7 +3,6 @@ import functools
 import tables
 
 from pylearn2.datasets.dataset import Dataset
-from pylearn2.datasets.transformer_dataset import TransformerDataset
 from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables
 from pylearn2.blocks import Block
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
@@ -186,8 +185,7 @@ class FramelevelIterator(FiniteDatasetIterator):
                     output.append( data[next_index, :] )
             else:
                 design_mat = []
-                for index in next_index:
-                    #X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )
+                for index in next_index:                    
                     X = data[index:index+self._dataset.tframes, :]
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
@@ -224,7 +222,7 @@ class SonglevelIterator(FiniteDatasetIterator):
             target_list.append(target)
             file_list.append(f)
             next_index.append(offset + np.arange(nframes))
-        next_index = np.hstack(next_index)
+        #next_index = np.hstack(next_index)
 
 
         spaces, sources = self._data_specs
@@ -240,10 +238,11 @@ class SonglevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:
-                    #X = self._dataset.transform( data[index:index+self._dataset.tframes, :] )
-                    X = data[index:index+self._dataset.tframes, :]
-                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
-                design_mat = np.vstack(design_mat)
+                    song_mat = []
+                    for i in index:
+                        X = data[i:i+self._dataset.tframes, :]
+                        song_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                    design_mat.append(np.vstack(song_mat))
 
                 if fn:
                     output.append( fn(design_mat) )
@@ -314,7 +313,7 @@ if __name__=='__main__':
     
     D = AudioDataset(config)
     
-    feat_space   = VectorSpace(dim=D.ncomponents)    
+    feat_space   = VectorSpace(dim=D.X.shape[1])    
     target_space = VectorSpace(dim=len(D.label_list))
     
     data_specs_frame = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
