@@ -133,7 +133,7 @@ def test_classifier_printf(X_test, y_test, Z_test, file_list, classifier, save_f
             pred_label = np.argmax(np.bincount(y_pred, minlength=n_labels))
             s=''
             for i in Z: s+='%2.2f\t'%i
-            f.write('{0}\t{1}\t{2}\t{3}\n'.format(fname, true_label, pred_label, s))
+            f.write('{0}\t{1}\t{2}\t{3}\n'.format(fname, true_label[0], pred_label, s))
         print ''
 
 if __name__ == "__main__":
