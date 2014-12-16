@@ -79,7 +79,7 @@ class AudioDataset(DenseDesignMatrixPyTables):
         self.hdf5.close()   
     
     @functools.wraps(Dataset.iterator)
-    def iterator(self, mode=None, batch_size=None, num_batches=None,
+    def iterator(self, mode=None, batch_size=1, num_batches=None,
                  topo=None, targets=None, rng=None, data_specs=None,
                  return_tuple=False):
         '''
@@ -128,14 +128,14 @@ class AudioDataset(DenseDesignMatrixPyTables):
         else:
             mode = resolve_iterator_class(mode)
 
-        if batch_size is None:
-            batch_size = getattr(self, '_iter_batch_size', None)
         if num_batches is None:
             num_batches = getattr(self, '_iter_num_batches', None)
         if rng is None and mode.stochastic:
             rng = self.rng
 
         if 'songlevel-features' in sub_sources:
+            if batch_size is not 1:
+                raise ValueError("'batch_size' must be set to 1 for songlevel iterator")
             return SonglevelIterator(self,
                               mode(len(self.file_list), batch_size, num_batches, rng),
                               data_specs=data_specs,
@@ -203,6 +203,7 @@ class FramelevelIterator(FiniteDatasetIterator):
 class SonglevelIterator(FiniteDatasetIterator):
     '''
     Returns all data associated with a particular song from the dataset
+    (only iterates 1 song at a time!)
     '''
     @functools.wraps(SubsetIterator.next)
     def next(self):
@@ -214,16 +215,8 @@ class SonglevelIterator(FiniteDatasetIterator):
         next_file = self._dataset.file_list[ next_file_index ] # !!! added line to iterate over different index set !!!
         
         # lookup file's position in the hdf5 array
-        target_list = []
-        next_index  = []
-        file_list   = []
-        for f in next_file:
-            offset, nframes, key, target = self._dataset.file_index[f]
-            target_list.append(target)
-            file_list.append(f)
-            next_index.append(offset + np.arange(nframes))
-        #next_index = np.hstack(next_index)
-
+        offset, nframes, key, target = self._dataset.file_index[next_file]
+        next_index = offset + np.arange(nframes)
 
         spaces, sources = self._data_specs
         output = []                
@@ -234,22 +227,20 @@ class SonglevelIterator(FiniteDatasetIterator):
                 #     output.append( fn( np.reshape(data[next_index[0], :], (1,-1)) ) )
                 # else:
                 #     output.append( np.reshape(data[next_index[0], :], (1,-1)) )
-                output.append( np.vstack(target_list) )
+                output.append( target )
             else:
                 design_mat = []
-                for index in next_index:
-                    song_mat = []
-                    for i in index:
-                        X = data[i:i+self._dataset.tframes, :]
-                        song_mat.append( X.reshape((np.prod(X.shape),)) )                    
-                    design_mat.append(np.vstack(song_mat))
+                for index in next_index:                    
+                    X = data[index:index+self._dataset.tframes, :]
+                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                design_mat = np.vstack(design_mat)
 
                 if fn:
                     output.append( fn(design_mat) )
                 else:
                     output.append( design_mat )
         
-        output.append(file_list)  
+        output.append(next_file)
         rval = tuple(output)
         if not self._return_tuple and len(rval) == 1:
             rval, = rval
