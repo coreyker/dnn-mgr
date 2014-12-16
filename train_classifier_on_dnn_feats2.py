@@ -43,7 +43,7 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
         agg_feat = []
         for i in xrange(0, feats.shape[0]-win_size, step):
             chunk = feats[i:i+win_size,:]
-            agg_feat.append(np.hstack(np.mean(chunk, axis=0), np.std(chunk, axis=0)))
+            agg_feat.append(np.hstack((np.mean(chunk, axis=0), np.std(chunk, axis=0))))
         
         X.append(np.vstack(agg_feat))
         y.append(np.hstack([true_label] * len(agg_feat)))
