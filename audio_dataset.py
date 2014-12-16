@@ -212,7 +212,7 @@ class SonglevelIterator(FiniteDatasetIterator):
         next_file_index = self._subset_iterator.next()        
         
         # associate numerical index with file from the dataset
-        next_file = self._dataset.file_list[ next_file_index ] # !!! added line to iterate over different index set !!!
+        next_file = self._dataset.file_list[ next_file_index ][0] # !!! added line to iterate over different index set !!!
         
         # lookup file's position in the hdf5 array
         offset, nframes, key, target = self._dataset.file_index[next_file]
