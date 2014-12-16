@@ -25,10 +25,10 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
     target_space = VectorSpace(dim=n_classes)
 
     data_specs = (CompositeSpace((feat_space, target_space)), ("songlevel-features", "targets"))     
-    iterator = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
+    iterator = dataset.iterator(mode='sequential', data_specs=data_specs)
 
     # compute feature representation, aggregrate frames
-    X=[]; y=[]; Z=[];
+    X=[]; y=[]; Z=[]; file_list=[];
     for n,el in enumerate(iterator):
         # display progress indicator
         sys.stdout.write('Aggregation progress: %2.0f%%\r' % (100*n/float(n_examples)))
@@ -36,27 +36,22 @@ def aggregate_features(model, dataset, which_layers=[2], win_size=200, step=100)
 
         input_data  = np.array(el[0], dtype=np.float32)
         output_data = fprop(input_data)
-        feats = np.hstack([output_data[i] for i in which_layers])
-        true_label = el[1][0]
+        feats       = np.hstack([output_data[i] for i in which_layers])
+        true_label  = el[1]
 
         # aggregate features
-        mean=[]; std=[]
+        agg_feat = []
         for i in xrange(0, feats.shape[0]-win_size, step):
             chunk = feats[i:i+win_size,:]
-            mean.append( np.mean(chunk, axis=0) )
-            std.append( np.std(chunk, axis=0) )
-           
+            agg_feat.append(np.hstack(np.mean(chunk, axis=0), np.std(chunk, axis=0)))
+        
+        X.append(np.vstack(agg_feat))
+        y.append(np.hstack([true_label] * len(agg_feat)))
         Z.append(np.sum(output_data[-1], axis=0)) 
-        y.append([true_label] * len(mean))
-        X.append( np.hstack((np.vstack(mean), np.vstack(std))) )
-
-        # labels = np.argmax(el[1], axis=1)
-        # true_label = labels[0]
-        # for entry in labels:
-        #     assert entry == true_label # check for indexing prob
+        file_list.append(e[2])
 
     print '' # newline
-    return X, y, Z
+    return X, y, Z, file_list
 
 def get_features(model, dataset, which_layers=[2], n_features=500):
     assert np.max(which_layers) < len(model.layers)
@@ -73,9 +68,9 @@ def get_features(model, dataset, which_layers=[2], n_features=500):
     target_space = VectorSpace(dim=n_classes)
 
     data_specs = (CompositeSpace((feat_space, target_space)), ("songlevel-features", "targets"))     
-    iterator = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
+    iterator = dataset.iterator(mode='sequential', data_specs=data_specs)
     
-    X=[]; y=[]; Z=[];
+    X=[]; y=[]; Z=[]; file_list=[];
     for n,el in enumerate(iterator):
         # display progress indicator
         sys.stdout.write('Getting features: %2.0f%%\r' % (100*n/float(n_examples)))
@@ -84,23 +79,19 @@ def get_features(model, dataset, which_layers=[2], n_features=500):
         input_data  = np.array(el[0], dtype=np.float32)
         output_data = fprop(input_data)        
         feats = np.hstack([output_data[i] for i in which_layers])
-        true_label = el[1][0]
+        true_label = el[1]
 
         if n_features:
             ind   = rng.permutation(feats.shape[0])
             feats = feats[ind[:n_features],:]
 
-        Z.append(np.sum(output_data[-1], axis=0))
         X.append(feats)
         y.append([true_label]*n_features)
-        
-        # labels = np.argmax(el[1], axis=1)
-        # true_label = labels[0]
-        # for entry in labels:
-        #     assert entry == true_label # check for indexing prob
+        Z.append(np.sum(output_data[-1], axis=0))
+        file_list.append(e[2])
 
     print ''
-    return X, y, Z
+    return X, y, Z, file_list
 
 def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     assert method in ['random_forest', 'linear_svm']
@@ -111,7 +102,7 @@ def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     else:
         classifier = SVC(C=0.5, kernel='linear', random_state=1234, verbose=verbose)
 
-    classifier.fit(np.vstack(X_train), np.hstack(y_train))
+    classifier.fit(X_train, y_train)
     return classifier       
 
 def test_classifier(X_test, y_test, classifier, n_labels=10):  
@@ -184,33 +175,29 @@ if __name__ == "__main__":
     testset  = yaml_parse.load(testset_yaml)
 
     if args.aggregate_features:
-        X_train, y_train, Z_train = aggregate_features(model, trainset, which_layers=args.which_layers)
+        X_train, y_train, Z_train, train_files = aggregate_features(model, trainset, which_layers=args.which_layers)
     else:
-        X_train, y_train, Z_train = get_features(model, trainset, which_layers=args.which_layers)
-
-    # train data
-    y_train = np.hstack([y*np.ones(len(X)) for X,y in zip(X_train, y_train)]) # upsample y (one label for each aggregated frame, instead of one label per song)
-    X_train = np.vstack(X_train)
+        X_train, y_train, Z_train, train_files = get_features(model, trainset, which_layers=args.which_layers)
     
     # test data
     if args.aggregate_features:
-        X_test, y_test, Z_test = aggregate_features(model, testset, which_layers=args.which_layers)
+        X_test, y_test, Z_test, test_files = aggregate_features(model, testset, which_layers=args.which_layers)
     else:
-        X_test, y_test, Z_test = get_features(model, testset, which_layers=args.which_layers)
+        X_test, y_test, Z_test, test_files = get_features(model, testset, which_layers=args.which_layers)
         
     print 'Training classifier'
-    classifier = train_classifier(X_train, y_train, method='random_forest')    
-
-    #file_list=sorted(glob.glob(os.path.join(args.dataset_dir, '*.wav')))
-    #file_numbers = testset.raw.file_list
-    file_list = testset.test_list
+    classifier = train_classifier(np.vstack(X_train), np.hstack(y_train), method='random_forest')
 
     print 'Testing classifier'
-    if args.save_folder:    
-        if not os.path.exists(args.save_folder):
-            os.mkdir(args.save_folder)
+    if args.save_file:    
 
-        test_classifier_printf(X_test, y_test, Z_test, file_list, classifier, args.save_file+'.txt')
+        test_classifier_printf(
+            X_test=X_test, 
+            y_test=y_test, 
+            Z_test=Z_test, 
+            file_list=test_files, 
+            classifier=classifier, 
+            save_file=args.save_file+'.txt')
 
         print 'Saving trained classifier'
         joblib.dump(classifier, args.save_file+'.pkl'), 9)
