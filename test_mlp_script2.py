@@ -81,7 +81,7 @@ def file_misclass_error(model, dataset):
         hist         = np.bincount(frame_labels, minlength=n_classes)
         vote_label   = np.argmax(hist) # most used label
 
-        true_label = np.argmax(el[1])
+        true_label = el[1] #np.argmax(el[1])
         confusion[true_label, vote_label] += 1
 
     total_error = 100*(1 - np.sum(np.diag(confusion)) / np.sum(confusion))
@@ -119,10 +119,10 @@ def file_misclass_error_printf(model, dataset, save_file, label_list=None):
             
             if label_list: # use-string labels
                 vote_label   = label_list[np.argmax(hist)] # most used label
-                true_label   = dataset.label_list[el[1][0]]#np.argmax(el[1])
+                true_label   = dataset.label_list[el[1]]#np.argmax(el[1])
             else: # use numeric labels
                 vote_label   = np.argmax(hist) # most used label
-                true_label   = el[1][0] #np.argmax(el[1])
+                true_label   = el[1] #np.argmax(el[1])
 
             csvwriter.writerow([dataset.file_list[i], true_label, vote_label])            
             # fname.write('{file_name}\t{true_label}\t{vote_label}\n'.format(
