@@ -271,8 +271,8 @@ class PreprocLayer(PretrainedLayer):
 
         if proc_type == 'standardize':
             dim      = nvis
-            biases   = np.array(-self.mean * self.istd, dtype=np.float32)
-            weights  = np.array(np.diag(self.istd), dtype=np.float32)
+            self.biases   = np.array(-self.mean * self.istd, dtype=np.float32)
+            self.weights  = np.array(np.diag(self.istd), dtype=np.float32)
             
         if proc_type == 'pca_whiten':
             dim      = kwargs['ncomponents']
@@ -280,19 +280,28 @@ class PreprocLayer(PretrainedLayer):
             U        = config['U'][:,:dim] # eigenvectors            
             self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)
             
-            biases   = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
-            weights  = np.array(self.pca.transpose(), dtype=np.float32)
+            self.biases   = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
+            self.weights  = np.array(self.pca.transpose(), dtype=np.float32)
 
         # Autoencoder with linear units
         pre_layer = Autoencoder(nvis=nvis, nhid=dim, act_enc=None, act_dec=None, irange=0)
         
         # Set weights for pre-processing
         params    = pre_layer.get_param_values()
-        params[1] = biases
-        params[2] = weights
+        params[1] = self.biases
+        params[2] = self.weights
         pre_layer.set_param_values(params)
 
         super(PreprocLayer, self).__init__(layer_name='pre', layer_content=pre_layer, freeze_params=True)        
+    
+    def get_biases(self):
+        return self.biases
+
+    def get_weights(self):
+        return self.weights
+
+    def get_param_values(self):
+        return list((self.get_weights(), self.get_biases()))
 
 if __name__=='__main__':
 
