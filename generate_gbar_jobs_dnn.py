@@ -50,4 +50,4 @@ for f, d, n in zip(fold_config, yaml_file, nunits):
 		savename += 'RSD'
 
 	with open(savename+'.sh', 'w') as fname:
-		fname.write(jobscript(jobname=savename, fold_config=f, yaml_file=os.path.join('/SCRATCH/cmke/dnn-mgr/',d), nunits=n, savename='/SCRATCH/cmke/saved_models/'+savename+'.pkl'))
+		fname.write(jobscript(jobname=savename, fold_config=f, yaml_file=os.path.join('/SCRATCH/cmke/dnn-mgr/',d), nunits=n, savename='/SCRATCH/cmke/saved_models/dnn/'+savename+'.pkl'))
