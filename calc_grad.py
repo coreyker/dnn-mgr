@@ -1,8 +1,13 @@
 import numpy as np
-import theano
+from theano import function
+from theano import tensor as T
 import pylearn2
 import audio_dataset
 import pdb
+
+'''
+# !!! There is something wrong in the following gradient calculation !!!
+# !!! (But we don't need it anyway, since theano can do the backprop calculation for us) !!!
 
 # Calculate gradient of MLP w.r.t. input data
 # (assumes rectified linear units and softmax output layer)
@@ -38,10 +43,11 @@ def calc_grad(X0, model, label):
         gradn = (dact(Xn_1.dot(Wn)) * gradn).dot(Wn.T)
 
     return gradn
+'''
 
-#def test_grad:
+# Create a simple model for testing
 rng = np.random.RandomState(111)
-epsilon = 1e-6
+epsilon = 1e-2
 nvis = 10
 nhid = 5
 n_classes = 3
@@ -52,32 +58,33 @@ label = rng.randint(0,n_classes)
 model = pylearn2.models.mlp.MLP(
     nvis=nvis,
     layers=[
-        # pylearn2.models.mlp.Linear(
-        #     layer_name='pre',
-        #     dim=nvis,
-        #     irange=0.5
-        #     ),
+        pylearn2.models.mlp.Linear(
+            layer_name='pre',
+            dim=nvis,
+            irange=1.
+            ),
         pylearn2.models.mlp.RectifiedLinear(
             layer_name='h0',
             dim=nhid,
-            irange=0.1),
-        # pylearn2.models.mlp.RectifiedLinear(
-        #     layer_name='h1',
-        #     dim=nhid,
-        #     irange=0.7),
-        # pylearn2.models.mlp.RectifiedLinear(
-        #     layer_name='h2',
-        #     dim=nhid,
-        #     irange=0.3),
+            irange=1.),
+        pylearn2.models.mlp.RectifiedLinear(
+            layer_name='h1',
+            dim=nhid,
+            irange=1.),
+        pylearn2.models.mlp.RectifiedLinear(
+            layer_name='h2',
+            dim=nhid,
+            irange=1.),
         pylearn2.models.mlp.Softmax(
             n_classes=n_classes,
             layer_name='y',
-            irange=0.5)
+            irange=1.)
         ])
 
+# Numerical computation of gradients
 X = model.get_input_space().make_theano_batch()
 Y = model.fprop( X )
-fprop = theano.function([X],Y)
+fprop = function([X],Y)
 
 dX_num = np.zeros(X0.shape)
 for i in range(nvis):
@@ -90,8 +97,21 @@ for i in range(nvis):
     X0[:,i] += epsilon
     dX_num[:,i] = (Y_plus - Y_minus) / (2*epsilon)
 
-dX_est = calc_grad(X0, model, label)
+# Computation of gradients using Theano
+label_vec = T.vector('label_vec')
+cost  = model.cost(label_vec, model.fprop(X))
+dCost = T.grad(cost, X) 
+f = function([X, label_vec], dCost)
 
-delta = np.linalg.norm(dX_num - dX_est)
+one_hot = np.zeros(n_classes, dtype=np.float32)
+one_hot[label] = 1
 
+dX_est = f(X0, one_hot) #dX_est = calc_grad(X0, model, label)
+
+delta = dX_num - dX_est
+# Print results
+print 'Numerical gradient:', dX_num
+print 'Theano gradient:', dX_est
+print 'Absolute difference:', np.abs(delta)
+print '2-norm of difference', np.linalg.norm(delta)
 

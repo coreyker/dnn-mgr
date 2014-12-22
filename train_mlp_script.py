@@ -6,7 +6,7 @@ import pdb
 if __name__=="__main__":
 	
 	parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
-	description='''Script to train a 3-hidden layer DNN with a variable number of units and the possibility of using dropout.
+	description='''Script to train a DNN with a variable number of units and the possibility of using dropout.
 	''')
 
 	parser.add_argument('fold_config', help='Path to dataset partition configuration file (generated with prepare_dataset.py)')
