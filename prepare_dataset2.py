@@ -326,13 +326,15 @@ if __name__=='__main__':
         ''')
 
     parser.add_argument('datadir', help='Path to dataset')
-    parser.add_argument('labels', help="A CSV file listing dataset's categorical labels")
+    parser.add_argument('labels', help="A CSV or newline separated list of the dataset's categorical labels")
     parser.add_argument('--hdf5', help='Name of hdf5 file to use')
+    parser.add_argument('--nfft', help='FFT length to use when making hdf5 dataset')
+    parser.add_argument('--nhop', help='Hop size to use when making hdf5 dataset')
 
     #parser.add_argument('--user-defined-partition', action='store_true', help='Use the --train, --valid, --')
-    parser.add_argument('--train')
-    parser.add_argument('--valid')
-    parser.add_argument('--test')
+    parser.add_argument('--train', help='path to newline seperated list of training files')
+    parser.add_argument('--valid', help='path to newline seperated list of validation files')
+    parser.add_argument('--test', help='path to newline seperated list of testing files')
 
     #parser.add_argument('--use-stratified-cv', action='store_true', help='Automatically generate partitions using stratified cross-validation')
     parser.add_argument('--train_prop', type=float)
@@ -372,6 +374,10 @@ if __name__=='__main__':
 
     if args.tframes is None:
         args.tframes = 1
+    if args.nfft is None:
+        args.nfft = 1024
+    if args.nhop is None:
+        args.nhop = 512
 
     with open(args.labels) as f:
         lines = f.readlines()
@@ -384,7 +390,11 @@ if __name__=='__main__':
 
     # create partitions
     print 'Preparing hdf5 file'
-    make_hdf5(args.hdf5, label_list, args.datadir)
+    make_hdf5(hdf5_save_name=args.hdf5, 
+        label_list=label_list, 
+        root_directory=args.datadir,
+        nfft=args.nfft,
+        nhop=args.nhop)
 
     if args.train is not None:
         'Print creating partition %s from files %s, %s, %s' % (args.partition_name, args.train, args.valid, args.test)
