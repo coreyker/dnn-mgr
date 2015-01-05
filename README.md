@@ -77,7 +77,7 @@ python train_mlp_script.py \
 	--output /path/to/save/model_file.pkl
 ```
 
-Two yaml configuration files are provided (but you can write your own for different experiments): "mlp_rlu2.yaml" and "mlp_rlu_dropout2.yaml"
+Some yaml configuration files are provided in the folder yaml_scripts (but you can write your own for different experiments).
 
 ####3. Test a previously trained and saved DNN:
 
