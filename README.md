@@ -17,13 +17,13 @@ This version is more flexible than the previous version and has been designed to
 ###Dataset organization:
 Audio files must be uncompressed in either WAV or AU format and many different types of directory structures are permissible. However, there must be a way of specifying the categorical label for each file in the dataset. This can be done either by embedding the label in the filename, or the name of the parent folder (the folder name will always take precedence in the case of a conflict).
 
-In order to handle large datasets that may not fit into RAM this code requires that the dataset first be saved as a hdf5 file, which can be partially loaded into RAM on demand during training and testing. The script prepare_dataset2.py will search for the dataset files, and prepare the hdf5 file. Furthermore, the prepare_dataset2.py script can generate train/validation/test configuration files that specify a partition to be used in an experiment (e.g., 10-fold cross-validation). The partition configuration contains important meta-data, such as the train/valid/test files (and their index in the hdf5 file), as well as the mean and standard deviation of the training set (which can be used to standardize the data for training, validation, and testing).
+In order to handle large datasets that may not fit into RAM this code requires that the dataset first be saved as a hdf5 file, which can be partially loaded into RAM on demand during training and testing. The script prepare_dataset.py will search for the dataset files, and prepare the hdf5 file. Furthermore, the prepare_dataset.py script can generate train/validation/test configuration files that specify a partition to be used in an experiment (e.g., 10-fold cross-validation). The partition configuration contains important meta-data, such as the train/valid/test files (and their index in the hdf5 file), as well as the mean and standard deviation of the training set (which can be used to standardize the data for training, validation, and testing).
 
 The following instructions demonstrate an example of how to use the code:
 ####1. Prepare the dataset and partition configuration file(s):
 
 ```
-python prepare_dataset2.py \
+python prepare_dataset.py \
 	/path/to/dataset \
 	/path/to/label_list.txt \
 	--hdf5 /path/to/save/dataset.hdf5 \
@@ -39,7 +39,7 @@ This will create the hdf5 dataset file and generate (1/test_prop) stratified par
 Alternatively the user can use a list of files when creating the partition:
 
 ```
-python prepare_dataset2.py \
+python prepare_dataset.py \
 	/path/to/dataset \
 	/path/to/label_list.txt \
 	--hdf5 /path/to/save/dataset.hdf5 \
@@ -64,7 +64,7 @@ the training list text file might look like this:
 blues/file.wav
 jazz/file.wav
 
-run: `python prepare_dataset2.py --help` to see a full list of options
+run: `python prepare_dataset.py --help` to see a full list of options
 
 ####2. Train a DNN:
 
@@ -81,7 +81,7 @@ Two yaml configuration files are provided (but you can write your own for differ
 ####3. Test a previously trained and saved DNN:
 
 ```
-python test_mlp_script2.py \
+python test_mlp_script.py \
 	/path/to/saved/model_file.pkl \
 	--majority_vote
 ```
@@ -89,7 +89,7 @@ python test_mlp_script2.py \
 The model knows which dataset it was trained on, and will use the associated test set. An alternative testset can also be specified:
 
 ```
-python test_mlp_script2.py \
+python test_mlp_script.py \
 	/path/to/saved/model_file.pkl \
 	--testset /path/to/alternate/partition_configuration.pkl
 	--save_file /path/to/savefile.txt
