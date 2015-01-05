@@ -126,6 +126,9 @@ if __name__ == '__main__':
     #     X_ad.append( generate_adversary(model, frame.reshape((1,input_space.dim)), 1, .25) )
     # X_ad = np.vstack(X_ad)
 
+    prediction = np.argmax(np.sum(fprop(Mag[:,:513]), axis=0))
+    print 'Predicted label on original file: ', prediction
+
     mu = 0.025
     X_adv = generate_adversary(model, Mag[:,:input_space.dim], args.label, mu)
     for i in xrange(10):
@@ -133,7 +136,7 @@ if __name__ == '__main__':
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
-    print 'Predicted label (before re-synthesis):', prediction
+    print 'Predicted label on adversarial example (before re-synthesis):', prediction
 
     # reconstruct time-domain sound
     x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*Phs), nfft, nhop)
@@ -142,7 +145,7 @@ if __name__ == '__main__':
 
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
     prediction = np.argmax(np.sum(fprop(Mag2[:,:513]), axis=0))
-    print 'Predicted label (after re-synthesis): ', prediction
+    print 'Predicted label on adversarial example (after re-synthesis): ', prediction
     # # find a 'correctly' classified frame
     # for i, (x, y) in enumerate(zip(X0, Y0)):
     #     print i
