@@ -1,4 +1,4 @@
-import sys, cPickle
+import os, sys, cPickle, argparse
 from pylearn2.train import Train
 from pylearn2.training_algorithms.sgd import SGD
 from pylearn2.costs.ebm_estimation import SML
@@ -8,12 +8,8 @@ from pylearn2.training_algorithms.learning_rule import RMSProp
 from pylearn2.costs.autoencoder import MeanSquaredReconstructionError
 
 import pylearn2.config.yaml_parse as yaml_parse
-from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
-
+from audio_dataset import AudioDataset, PreprocLayer
 import pdb
-
-MAX_EPOCHS_UNSUPERVISED = 5
-#USE_RBM_PRETRAIN = True
 
 '''
 (Although it may be more complicated) We build our models and dataset using yaml in order to keep a record of how things were built
@@ -59,7 +55,7 @@ def get_ae(nvis, nhid):
     model = yaml_parse.load(model_yaml)
     return model
 
-def get_rbm_trainer(model, dataset, save_path):
+def get_rbm_trainer(model, dataset, save_path, epochs=5):
     """
     A Restricted Boltzmann Machine (RBM) trainer    
     """
@@ -72,7 +68,7 @@ def get_rbm_trainer(model, dataset, save_path):
     'learning_rule': RMSProp(),
     'monitoring_dataset': dataset,
     'cost' : SML(250, 1),
-    'termination_criterion' : EpochCounter(max_epochs=MAX_EPOCHS_UNSUPERVISED),
+    'termination_criterion' : EpochCounter(max_epochs=epochs),
     }
     
     return Train(model=model, 
@@ -82,7 +78,7 @@ def get_rbm_trainer(model, dataset, save_path):
         save_freq=1
         )#, extensions=extensions)
 
-def get_ae_trainer(model, dataset, save_path):
+def get_ae_trainer(model, dataset, save_path, epochs=5):
     """
     An Autoencoder (AE) trainer    
     """
@@ -95,7 +91,7 @@ def get_ae_trainer(model, dataset, save_path):
     'learning_rule': RMSProp(),
     'monitoring_dataset': dataset,
     'cost' : MeanSquaredReconstructionError(),
-    'termination_criterion' : EpochCounter(max_epochs=MAX_EPOCHS_UNSUPERVISED),
+    'termination_criterion' : EpochCounter(max_epochs=epochs),
     }
 
     return Train(model=model, 
@@ -107,40 +103,56 @@ def get_ae_trainer(model, dataset, save_path):
 
 if __name__=="__main__":
 
-    fold_config = sys.argv[1] # e.g., GTZAN_1024-fold-1_of_4.pkl
-    USE_RBM_PRETRAIN = int(sys.argv[2]) # 0 or 1
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+    description='Script to pretrain the layers of a DNN.')
 
-    with open(fold_config) as f:
-        cfg = cPickle.load(f)
+    parser.add_argument('fold_config', help='Path to dataset configuration file (generated with prepare_dataset.py)')
+    parser.add_argument('--arch', nargs='*', type=int, help='Architecture: nvis nhid1 nhid2 ...')
+    parser.add_argument('--epochs', type=int, help='Number of training epochs per layer')
+    parser.add_argument('--save_prefix', help='Full path and prefix for saving output models')
+    parser.add_argument('--use_autoencoder', action='store_true')
+    args = parser.parse_args()
 
-    base  = cfg['h5_file_name'].split('.h5')[0]
-    ext   = fold_config.split(base)[1]
-    
-    nvis   = 513
-    nhid   = 50
-    arch   = [[nvis, nhid], [nhid, nhid], [nhid, nhid]]
+    if args.epochs is None:
+        args.epochs = 5
 
-    transformer_yaml = '''!obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
-        raw : %(raw)s,
-        transformer : %(transformer)s
-    }'''
+    arch = [(i,j) for i,j in zip(args.arch[:-1], args.arch[1:])]
 
-    dataset_yaml = transformer_yaml % {
-        'raw' : '''!obj:GTZAN_dataset.GTZAN_dataset {
-            which_set : 'train',
-            config : !pkl: "%(fold_config)s"
-            }''' % {'fold_config' : fold_config},
-        'transformer' : '''!obj:GTZAN_dataset.GTZAN_standardizer {
-            config : !pkl: "%(fold_config)s"
-            }''' % {'fold_config' : fold_config},
-        }
+    with open(args.fold_config) as f: 
+        config = cPickle.load(f)
 
-    for i,(v,h) in enumerate(arch):
+    preproc_layer = PreprocLayer(config=config, proc_type='standardize')
 
-        
-        dataset = yaml_parse.load( dataset_yaml )
+    dataset = TransformerDataset(
+        raw=AudioDataset(which_set='train', config=config),
+        transformer=preproc_layer.layer_content
+        )
 
-        if USE_RBM_PRETRAIN:
+    # transformer_yaml = '''!obj:pylearn2.datasets.transformer_dataset.TransformerDataset {
+    #     raw : %(raw)s,
+    #     transformer : %(transformer)s
+    # }'''
+    #
+    # dataset_yaml = transformer_yaml % {
+    #     'raw' : '''!obj:audio_dataset.AudioDataset {
+    #         which_set : 'train',
+    #         config : !pkl: "%(fold_config)s"
+    #     }''' % {'fold_config' : args.fold_config},
+    #     'transformer' : '''!obj:pylearn2.models.mlp.MLP {
+    #         nvis : %(nvis)i,
+    #         layers : 
+    #         [
+    #             !obj:audio_dataset.PreprocLayer {
+    #                 config : !pkl: "%(fold_config)s",
+    #                 proc_type : 'standardize'
+    #             } 
+    #         ]
+    #     }''' % {'nvis' : args.arch[0], 'fold_config' : args.fold_config }
+    # }
+
+    for i,(v,h) in enumerate(arch):        
+
+        if not args.use_autoencoder:
             print 'Pretraining layer %d with RBM' % i
 
             if i==0:
@@ -148,18 +160,20 @@ if __name__=="__main__":
             else:
                 model = get_rbm(v,h)
 
-            save_path = './saved/rbm_layer%d%s' % (i+1, ext)
-            trainer   = get_rbm_trainer(model=model, dataset=dataset, save_path=save_path)
+            save_path = args.save_prefix+ 'RBM_L{}.pkl'.format(i+1)
+            trainer   = get_rbm_trainer(model=model, dataset=dataset, save_path=save_path, epochs=args.epochs)
         else:
             print 'Pretraining layer %d with AE' % i
 
             model     = get_ae(v,h)
-            save_path = './saved/ae_layer%d%s' % (i+1, ext)
-            trainer   = get_ae_trainer(model=model, dataset=dataset, save_path=save_path)
+            save_path = args.save_prefix + 'AE_L{}.pkl'.format(i+1)
+            trainer   = get_ae_trainer(model=model, dataset=dataset, save_path=save_path, epochs=args.epochs)
 
         trainer.main_loop()
 
-        dataset_yaml = transformer_yaml % {'raw' : dataset_yaml, 'transformer' : '!pkl: %s' % save_path}
+        dataset = TransformerDataset(raw=dataset, transformer=model)
 
+        # dataset_yaml = transformer_yaml % {'raw' : dataset_yaml, 'transformer' : '!pkl: %s' % save_path}
+        # dataset = yaml_parse.load( dataset_yaml )
 
 

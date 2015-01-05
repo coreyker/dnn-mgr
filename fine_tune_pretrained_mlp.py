@@ -1,4 +1,4 @@
-import sys, re, cPickle
+import sys, re, cPickle, argparse
 from glob import glob
 from pylearn2.train import Train
 from pylearn2.utils import serial
@@ -9,13 +9,13 @@ from pylearn2.training_algorithms.learning_rule import RMSProp
 from pylearn2.termination_criteria import MonitorBased
 from pylearn2.train_extensions.best_params import MonitorBasedSaveBest
 from pylearn2.datasets.transformer_dataset import TransformerDataset
+from audio_dataset import AudioDataset
 
 import pylearn2.config.yaml_parse as yaml_parse
-from GTZAN_dataset import GTZAN_dataset, GTZAN_standardizer
 
 import pdb
 
-def get_mlp(nvis, pretrained_layers):
+def get_mlp(nvis, nclasses, pretrained_layers):
 
   layer_yaml = []
   for i, m in enumerate(pretrained_layers):
@@ -25,10 +25,10 @@ def get_mlp(nvis, pretrained_layers):
       }''' % {'layer_name' : 'h'+str(i), 'layer_content' : m })
 
   layer_yaml.append('''!obj:pylearn2.models.mlp.Softmax {
-    n_classes : 10,
+    n_classes : %(nclasses)i,
     layer_name : "y",
     irange : .01
-    }''')
+    }''' % {'nclasses' : nclasses})
 
   layer_yaml = ','.join(layer_yaml)
 
@@ -67,25 +67,35 @@ def get_trainer(model, trainset, validset, save_path):
 
 if __name__=="__main__":
 
-  pretrained_layers = sorted(sys.argv[1:-1])
-  save_path = sys.argv[-1]
-  print pretrained_layers
+  parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+  description='Script to pretrain the layers of a DNN.')
+
+  parser.add_argument('fold_config', help='Path to dataset configuration file (generated with prepare_dataset.py)')
+  parser.add_argument('--pretrained_layers', nargs='*', help='List of pretrained layers (sorted from input to output)')
+  parser.add_argument('--save_file', help='Full path and for saving output model')
+  args = parser.parse_args()
   
-  # get input model
-  input_model = serial.load(pretrained_layers[0])  
+  trainset = yaml_parse.load(
+    '''!obj:audio_dataset.AudioDataset {
+             which_set : 'train',
+             config : !pkl: "%(fold_config)s"
+    }''' % {'fold_config' : args.fold_config} )
 
-  # get datasets for training and validation from pretrained input layer
-  p = re.compile(r"which_set.*'(train)'")
-  trainset_yaml = input_model.dataset_yaml_src
-  validset_yaml = p.sub("which_set: 'valid'", trainset_yaml)
+  validset = yaml_parse.load(
+    '''!obj:audio_dataset.AudioDataset {
+             which_set : 'valid',
+             config : !pkl: "%(fold_config)s"
+    }''' % {'fold_config' : args.fold_config} )
 
-  trainset  = yaml_parse.load(trainset_yaml)
-  validset  = yaml_parse.load(validset_yaml)  
 
-  model     = get_mlp(input_model.nvis, pretrained_layers)
-  trainset  = yaml_parse.load(trainset_yaml)
-  validset  = yaml_parse.load(validset_yaml)
-  trainer   = get_trainer(model=model, trainset=trainset, validset=validset, save_path=save_path)
+  testset = yaml_parse.load(
+    '''!obj:audio_dataset.AudioDataset {
+             which_set : 'test',
+             config : !pkl: "%(fold_config)s"
+    }''' % {'fold_config' : args.fold_config} )
+
+  model   = get_mlp(nvis=trainset.X.shape[1], nclasses=trainset.y.shape[1], pretrained_layers=args.pretrained_layers)
+  trainer = get_trainer(model=model, trainset=trainset, validset=validset, save_path=args.save_file)
   
   trainer.main_loop()
 
