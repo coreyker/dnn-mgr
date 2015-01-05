@@ -53,16 +53,24 @@ python prepare_dataset.py \
 The lists should be newline separated, and contain the relative path to each file (from the root folder of the dataset). For example if the directory structure is as follows:
 
 /root/blues/file.wav
+
 /root/jazz/file.wav
+
 .
+
 .
+
 .
+
 
 then
 
 the training list text file might look like this:
+
 blues/file.wav
+
 jazz/file.wav
+
 
 run: `python prepare_dataset.py --help` to see a full list of options
 
