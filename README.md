@@ -99,13 +99,4 @@ python test_mlp_script2.py \
 
 
 ##V1.0 Instructions
-1. Download the Tzanetakis genre set http://opihi.cs.uvic.ca/sound/genres.tar.gz
-2. Copy all of the files into a single directory
-3. Convert the files to WAV format 
-4. Clone the repository to a local machine: git clone https://github.com/coreyker/dnn-mgr.git
-5. Cd into the reprository directory
-6. run: python prepare_dataset.py /path/to/tzanetakis/wav/files
-7. run: python train_mlp_script.py GTZAN_1024-fold-1_of_4.pkl mlp_rlu.yaml
-8. run: python test_mlp_script.py ./saved/mlp_rlu-fold-1_of_4.pkl
-
-
+This version has now been removed, but can be checked out as a branch using the v1.0 tag.
