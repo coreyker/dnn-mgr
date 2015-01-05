@@ -60,9 +60,7 @@ The lists should be newline separated, and contain the relative path to each fil
 .   
 
 
-then
-
-the training list text file might look like this:
+then the training list text file should look like this:
 
 blues/file.wav   
 jazz/file.wav   
