@@ -6,7 +6,6 @@ from pylearn2.utils import serial
 from audio_dataset import AudioDataset
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
-import GTZAN_dataset
 
 import pdb
 def frame_misclass_error(model, dataset):
