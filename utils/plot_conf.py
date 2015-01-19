@@ -7,7 +7,7 @@ import numpy as np
 from pylearn2.utils import serial
 import pylearn2.config.yaml_parse as yaml_parse
 
-from test_mlp_script import frame_misclass_error, file_misclass_error
+#from test_mlp_script import frame_misclass_error, file_misclass_error
 
 def plot_conf_mat(confusion, title):
     
@@ -26,7 +26,7 @@ def plot_conf_mat(confusion, title):
                 color='k'
             else:
                 color='w'
-            ax.annotate('%2.1f'%augmented_confusion[x][y], xy=(y, x), horizontalalignment='center', verticalalignment='center',color=color)
+            ax.annotate('%2.1f'%augmented_confusion[x][y], xy=(y, x), horizontalalignment='center', verticalalignment='center',color=color, fontsize=9)
 
     ax.xaxis.tick_top()
     plt.xticks(range(width), labels+['Pr'])
@@ -56,7 +56,7 @@ def save_conf_mat(confusion, title):
                 color='k'
             else:
                 color='w'
-            ax.annotate('%2.1f'%augmented_confusion[x][y], xy=(y, x), horizontalalignment='center', verticalalignment='center',color=color)
+            ax.annotate('%2.1f'%augmented_confusion[x][y], xy=(y, x), horizontalalignment='center', verticalalignment='center',color=color, fontsize=9)
 
     ax.xaxis.tick_top()
     plt.xticks(range(width), labels+['Pr'])
@@ -66,7 +66,7 @@ def save_conf_mat(confusion, title):
     for label in xlabels: 
         label.set_rotation(30) 
 
-    plt.xlabel(title)
+    #plt.xlabel(title.split('/')[-1])
     #plt.show()
 
     plt.savefig(title + '.pdf', format='pdf')
@@ -120,9 +120,9 @@ def augment_confusion_matrix(confusion):
     fp = np.sum(confusion, axis=1) - tp # false positive count
     fn = np.sum(confusion, axis=0) - tp # false negative count
 
-    pr     = tp / (tp + fp) # precision
-    rc     = tp / (tp + fn) # recall
-    fscore = 2. * pr * rc / (pr + rc) # f-score
+    pr     = tp / ((tp + fp) + 1e-12) # precision
+    rc     = tp / ((tp + fn) + 1e-12)# recall
+    fscore = 2. * pr * rc / ((pr + rc) + 1e-12) # f-score
     ave    = np.sum(np.diag(confusion)) / np.sum(confusion) * 100
 
     confusion = confusion / np.sum(confusion, axis=0) * 100 # precentages

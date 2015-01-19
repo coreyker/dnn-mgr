@@ -5,6 +5,7 @@ import theano
 from sklearn.externals import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
+from sklearn.grid_search import GridSearchCV
 from pylearn2.utils import serial
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
@@ -100,10 +101,13 @@ def train_classifier(X_train, y_train, method='random_forest', verbose=2):
     if method=='random_forest':
         classifier = RandomForestClassifier(n_estimators=500, random_state=1234, verbose=verbose, n_jobs=2)
     else:
-        classifier = SVC(C=0.5, kernel='linear', random_state=1234, verbose=verbose)
+        parameters = {'C' : 10**np.arange(-2,4.)}
+        grid = GridSearchCV(SVC(), parameters, verbose=3)
+        grid.fit(X_train, y_train)
+        classifier = grid.best_estimator_
+        #classifier = SVC(C=0.5, kernel='linear', random_state=1234, verbose=verbose)
 
-    classifier.fit(X_train, y_train)
-    return classifier       
+    return classifier.fit(X_train, y_train)       
 
 def test_classifier(X_test, y_test, classifier, n_labels=10):  
     n_examples = len(y_test)    
@@ -148,17 +152,22 @@ if __name__ == "__main__":
     parser.add_argument('model_file', help='Path to trained DNN model file')
     parser.add_argument('--which_layers', nargs='*', type=int, help='List of which DNN layers to use as features')
     parser.add_argument('--aggregate_features', action='store_true', help='option to aggregate frames (mean/std of frames used to train classifier)')
+    parser.add_argument('--classifier', help="either 'random_forest' or 'linear_svm'")
     parser.add_argument('--save_file', help='Output classification results to a text file')
 
     args = parser.parse_args()
     
     if not args.which_layers:
-        parser.error('Please specify --which_layers x, with x either 0, 1, 2 or 0 1 2')
+        parser.error('Please specify --which_layers x, with x either 1, 2, 3 or 1 2 3 (layer 0 is a pre-processing layer)')
 
     if args.aggregate_features:
         print 'Using aggregate features'
     else:
         print 'Not using aggregate features'
+
+    if args.classifier is None:
+        print 'No classifer selected, using random forest'
+        args.classifier = 'random_forest'
 
     # load model
     model = serial.load(args.model_file) 
@@ -175,17 +184,17 @@ if __name__ == "__main__":
 
     if args.aggregate_features:
         X_train, y_train, Z_train, train_files = aggregate_features(model, trainset, which_layers=args.which_layers)
-    else:
-        X_train, y_train, Z_train, train_files = get_features(model, trainset, which_layers=args.which_layers)
-    
-    # test data
-    if args.aggregate_features:
+        X_valid, y_valid, Z_valid, valid_files = aggregate_features(model, validset, which_layers=args.which_layers)
         X_test, y_test, Z_test, test_files = aggregate_features(model, testset, which_layers=args.which_layers)
     else:
+        X_train, y_train, Z_train, train_files = get_features(model, trainset, which_layers=args.which_layers)
+        X_valid, y_valid, Z_valid, valid_files = get_features(model, validset, which_layers=args.which_layers)        
         X_test, y_test, Z_test, test_files = get_features(model, testset, which_layers=args.which_layers)
         
     print 'Training classifier'
-    classifier = train_classifier(np.vstack(X_train), np.hstack(y_train), method='random_forest')
+    X_all = np.vstack((np.vstack(X_train), np.vstack(X_valid)))
+    y_all = np.hstack((np.hstack(y_train), np.hstack(y_valid)))
+    classifier = train_classifier(X_all, y_all, method=args.classifier)
 
     print 'Testing classifier'
     if args.save_file:    
