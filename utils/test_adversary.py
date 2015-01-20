@@ -9,6 +9,25 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
+# min_y f(y)
+# s.t. y >= 0 and ||y-x|| < e
+
+# z = max(0, y^k - mu.f'(y^k))
+# y^k+1 = P(z)
+
+# P(z) = min_u ||u-z|| s.t. {u | ||u-x|| < e }
+# Lagrangian(u,l) = L(u,l) = ||u-z|| + l(||u-x|| - e)
+# dL/du = u-z + l(u-x) = 0
+# u = (I+l)^-1 (z + l.x) = (1/(1+l)) (z + l.x)
+
+# KKT:
+# ||u-x|| = e
+# ||(1/(1+l))(z + l.x) - x|| = e
+# ||(1/(1+l))z + ((l/(1+l))-1)x|| = e
+# ||(1/(1+l))z - (1/(1+l))x|| = e
+# (1/(1+l))||z-x|| = e
+# l = ||z-x||/e - 1
+
 # find adversarial examples
 def generate_adversary(model, X0, label, epsilon=.25):
     '''
