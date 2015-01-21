@@ -60,6 +60,7 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
     fprop     = theano.function([in_batch], model.fprop(in_batch))
 
     # projected gradient:
+    last_pred = 0
     Y = np.copy(X0)
     for i in xrange(maxits):        
 
@@ -80,7 +81,11 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
 
         print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
         if pred[label] > stop_thresh:
-            break    
+            break
+        elif pred[label] < last_pred:
+            break
+        last_pred = pred[label]
+
     return Y
 
 def compute_fft(x, nfft=1024, nhop=512):
@@ -167,7 +172,7 @@ if __name__ == '__main__':
 
     snr = 30
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20)
-    X_adv = find_adversary(model, X0, args.label, mu=.2, epsilon=epsilon, maxits=100, stop_thresh=0.95)
+    X_adv = find_adversary(model, X0, args.label, mu=.05, epsilon=epsilon, maxits=100, stop_thresh=0.95)
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
@@ -184,7 +189,7 @@ if __name__ == '__main__':
 
     # now try with classifier trained on last layer of dnn features
     clf = joblib.load(args.model)
-    L = os.path.splitext(os.path.split(args.model)[-1])[0].split('_L')[-1]
+    L   = os.path.splitext(os.path.split(args.model)[-1])[0].split('_L')[-1]
     if L=='All':
         which_layers = [1,2,3]
     else:
