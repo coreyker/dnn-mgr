@@ -1,7 +1,7 @@
 import argparse
 import scikits.audiolab as audiolab
 import numpy as np
-from theano import function
+import theano
 from theano import tensor as T
 from pylearn2.utils import serial
 from audio_dataset import AudioDataset
@@ -9,56 +9,78 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
-# min_y f(y)
-# s.t. y >= 0 and ||y-x|| < e
-
-# z = max(0, y^k - mu.f'(y^k))
-# y^k+1 = P(z)
-
-# P(z) = min_u ||u-z|| s.t. {u | ||u-x|| < e }
-# Lagrangian(u,l) = L(u,l) = ||u-z|| + l(||u-x|| - e)
-# dL/du = u-z + l(u-x) = 0
-# u = (I+l)^-1 (z + l.x) = (1/(1+l)) (z + l.x)
-
-# KKT:
-# ||u-x|| = e
-# ||(1/(1+l))(z + l.x) - x|| = e
-# ||(1/(1+l))z + ((l/(1+l))-1)x|| = e
-# ||(1/(1+l))z - (1/(1+l))x|| = e
-# (1/(1+l))||z-x|| = e
-# l = ||z-x||/e - 1
-
-# find adversarial examples
-def generate_adversary(model, X0, label, epsilon=.25):
+def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5):
     '''
-    model - dnn model
+    Solves:
+
+    y* = argmin_y f(y; label) 
+    s.t. y >= 0 and ||y-X0|| < e
+
+    where f(y) is the cost associated the network associates with the pair (y,label)
+
+    This can be solved using the projected gradient method:
+
+    min_y f(y)
+    s.t. y >= 0 and ||y-X0|| < e
+
+    z = max(0, y^k - mu.f'(y^k))
+    y^k+1 = P(z)
+
+    P(z) = min_u ||u-z|| s.t. {u | ||u-X0|| < e }
+    Lagrangian(u,l) = L(u,l) = ||u-z|| + nu*(||u-X0|| - e)
+    dL/du = u-z + nu*(u-X0) = 0
+    u = (1+nu)^-1 (z + nu*X0)
+
+    KKT:
+    ||u-x|| = e
+    ||(1/(1+nu))(z + nu*x) - x|| = e
+    ||(1/(1+nu))z + ((nu/(1+nu))-1)x|| = e
+    ||(1/(1+nu))z - (1/(1+nu))x|| = e
+    (1/(1+nu))||z-x|| = e
+    nu = max(0,||z-x||/e - 1)
+
+    function inputs:
+
+    model - pylearn2 dnn model (implements fprop, cost)
     X0 - an example that the model classifies correctly
     label - an incorrect label
     '''
-
-    # Computation of gradients using Theano
-    X = model.get_input_space().make_theano_batch()
-    label_vec = model.get_output_space().make_theano_batch()
-    #label_vec = T.vector('label_vec')
-    cost  = model.cost(label_vec, model.fprop(X))
-    dCost = T.grad(cost, X) 
-    f = function([X, label_vec], dCost)
-
     # convert integer label into one-hot vector
-    n_classes = model.get_output_space().dim
-    
-    #one_hot = np.zeros(n_classes, dtype=np.float32)
-    #one_hot[label] = 1
-    
-    n_examples = X0.shape[0]
-    one_hot = np.zeros((n_examples, n_classes), dtype=np.float32)
-    one_hot[:,label] = 1
+    n_classes, n_examples = model.get_output_space().dim, X0.shape[0]     
+    one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
+    one_hot[:,label]      = 1
 
-    # compute gradient
-    delta = f(X0, one_hot)
-    X_adv = X0 - epsilon * n_examples * delta
+    # Set-up gradient computation w/ Theano
+    in_batch  = model.get_input_space().make_theano_batch()
+    out_batch = model.get_output_space().make_theano_batch()
+    cost      = model.cost(out_batch, model.fprop(in_batch))
+    dCost     = T.grad(cost, in_batch)
+    grad      = theano.function([in_batch, out_batch], dCost)
+    fprop     = theano.function([in_batch], model.fprop(in_batch))
 
-    return X_adv * (X_adv>0)
+    # projected gradient:
+    Y = np.copy(X0)
+    for i in xrange(maxits):        
+
+        # gradient step
+        Z = Y - mu * n_examples * grad(Y, one_hot)
+
+        # non-negative projection
+        Z = Z * (Z>=0)
+        
+        # maximum allowable signal-to-noise projection
+        nu = np.linalg.norm(Z-X0)/n_examples/epsilon - 1 # lagrange multiplier
+        nu = nu * (nu>=0)
+        Y  = (Z + nu*X0) / (1+nu)
+
+        # stopping condition
+        pred = np.sum(fprop(Y), axis=0)
+        pred /= np.sum(pred)
+
+        print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
+        if pred[label] > stop_thresh:
+            break    
+    return Y
 
 def compute_fft(x, nfft=1024, nhop=512):
   
@@ -75,25 +97,14 @@ def compute_fft(x, nfft=1024, nhop=512):
 
 def overlap_add(X, nfft=1024, nhop=512):
 
-    # window = np.hanning(nfft) # must use same window as compute_fft
-    # x = np.zeros( X.shape[0]*(nhop+1) )
-    # win_sum = np.zeros( X.shape[0]*(nhop+1) )
-
-    # for i, frame in enumerate(X):
-    #     sup = i*nhop + np.arange(nfft)
-    #     x[sup] += np.real(np.fft.ifft(frame)) * window
-    #     win_sum[sup] += window**2
-    
-    # return x/(win_sum + 1e-12)
-
     window = np.hanning(nfft) # must use same window as compute_fft
     x = np.zeros( X.shape[0]*(nhop+1) )
     win_sum = np.zeros( X.shape[0]*(nhop+1) )
 
     for i, frame in enumerate(X):
         sup = i*nhop + np.arange(nfft)
-        x[sup] += np.real(np.fft.ifft(frame))
-        win_sum[sup] += window # ensure perfect reconstruction
+        x[sup] += np.real(np.fft.ifft(frame)) # *window
+        win_sum[sup] += window #**2 # ensure perfect reconstruction
     
     return x/(win_sum + 1e-12)
 
@@ -118,16 +129,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # load model, fprop function
-    model = serial.load(args.model)
+    model       = serial.load(args.model)
     input_space = model.get_input_space()
-    batch = input_space.make_theano_batch()
-    fprop = function([batch], model.fprop(batch))
-
-    # test_file = 'blues/blues.00060.wav'
-    # dataset = yaml_parse.load(model.dataset_yaml_src)
-    # offset, nframes, label, target = dataset.file_index[test_file]
-    # X0 = dataset.X[offset:offset+nframes,:]
-    # Y0 = fprop(X0)
+    batch       = input_space.make_theano_batch()
+    fprop       = theano.function([batch], model.fprop(batch))
 
     # compute fft of data
     nfft = 2*(input_space.dim-1)
@@ -135,23 +140,13 @@ if __name__ == '__main__':
     x, fs, fmt = audiolab.wavread(args.test_file)
     Mag, Phs = compute_fft(x, nfft, nhop)
 
-    # check classification
-    # target = np.argmax(np.sum(y, axis=0))
-
-    # attempt to generate nearby adversarial example that is classified as...
-    # X_ad = []
-    # for i, frame in enumerate(Mag[:,:input_space.dim]):
-    #     print i
-    #     X_ad.append( generate_adversary(model, frame.reshape((1,input_space.dim)), 1, .25) )
-    # X_ad = np.vstack(X_ad)
-
-    prediction = np.argmax(np.sum(fprop(Mag[:,:513]), axis=0))
+    X0 = Mag[:,:input_space.dim]
+    prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
-    mu = 0.025
-    X_adv = generate_adversary(model, Mag[:,:input_space.dim], args.label, mu)
-    for i in xrange(10):
-        X_adv = generate_adversary(model, X_adv, args.label, mu)
+    snr = 30
+    epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20)
+    X_adv = find_adversary(model, X0, args.label, mu=.1, epsilon=epsilon, maxits=100, stop_thresh=0.5)
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
@@ -163,25 +158,6 @@ if __name__ == '__main__':
     audiolab.wavwrite(x_adv, '/tmp/adversary.wav', fs, fmt)
 
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
-    prediction = np.argmax(np.sum(fprop(Mag2[:,:513]), axis=0))
+    prediction = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
     print 'Predicted label on adversarial example (after re-synthesis): ', prediction
-    # # find a 'correctly' classified frame
-    # for i, (x, y) in enumerate(zip(X0, Y0)):
-    #     print i
-    #     if np.argmax(y)==target:
-    #         print 'Found correctly classified frame (confidence: {})'.format(y[target])
-    #         break
-
-    # decoy = np.random.choice( np.setdiff1d(dataset.targets, [target]) )
-    # print 'Attempting to find adversarial example with decoy label {} (true label should be {})'.format(decoy, target)
-    # X_adv = generate_adversary(model, x.reshape((1,513)), decoy, epsilon=0.5)
-
-    # #print 'Testing if adversarial example is mis-classified'
-    # y = fprop(X_adv)[0]
-    # prediction = np.argmax(y)
-    # confidence = y[prediction]
-    # if prediction != target:
-    #     print 'Adversarial example mis-classified as {} (should be {}). Confidence in prediction is {}'.format(prediction, target, confidence)
-    # else:
-    #     print 'Unsuccessful at generating an adversary, confidence in prediction is: {}'.format(confidence)
 
