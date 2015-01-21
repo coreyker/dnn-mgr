@@ -1,5 +1,6 @@
-import argparse
+import os, argparse
 import scikits.audiolab as audiolab
+from sklearn.externals import joblib
 import numpy as np
 import theano
 from theano import tensor as T
@@ -118,18 +119,38 @@ def overlap_add(X, nfft=1024, nhop=512):
 #         x = overlap_add(X0, nfft, nhop)
 #     return x
 
+def aggregate_features(model, X, which_layers=[3], win_size=200, step=100):
+    assert np.max(which_layers) < len(model.layers)
+
+    n_classes, n_examples = model.get_output_space().dim, X.shape[0] 
+    in_batch              = model.get_input_space().make_theano_batch()    
+    fprop                 = theano.function([in_batch], model.fprop(in_batch, return_all=True))
+    output_data           = fprop(X)
+    feats                 = np.hstack([output_data[i] for i in which_layers])
+
+    agg_feat = []
+    for i in xrange(0, feats.shape[0]-win_size, step):
+        chunk = feats[i:i+win_size,:]
+        agg_feat.append(np.hstack((np.mean(chunk, axis=0), np.std(chunk, axis=0))))
+        
+    return np.vstack(agg_feat)
+
 if __name__ == '__main__':
-    
+    '''
+    Example call:
+    python path/to/dnn-mgr/utils/test_adversary.py /path/to/dnn/S_50_RS.pkl /path/to/rf/S_50_RS_AF_LAll.pkl blues/blues.00001.wav 5
+    '''
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
     description='''Script to find/test adversarial examples with a dnn''')
-    parser.add_argument('model', help='model to use')
+    parser.add_argument('dnn_model', help='dnn model to use for features')
+    parser.add_argument('model', help='model trained on dnn features')
     parser.add_argument('test_file', help='file to test model on')
     parser.add_argument('label', help='target to aim for')
 
     args = parser.parse_args()
 
     # load model, fprop function
-    model       = serial.load(args.model)
+    model       = serial.load(args.dnn_model)
     input_space = model.get_input_space()
     batch       = input_space.make_theano_batch()
     fprop       = theano.function([batch], model.fprop(batch))
@@ -146,7 +167,7 @@ if __name__ == '__main__':
 
     snr = 30
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20)
-    X_adv = find_adversary(model, X0, args.label, mu=.1, epsilon=epsilon, maxits=100, stop_thresh=0.5)
+    X_adv = find_adversary(model, X0, args.label, mu=.2, epsilon=epsilon, maxits=100, stop_thresh=0.95)
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
@@ -160,4 +181,18 @@ if __name__ == '__main__':
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
     prediction = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
     print 'Predicted label on adversarial example (after re-synthesis): ', prediction
+
+    # now try with classifier trained on last layer of dnn features
+    clf = joblib.load(args.model)
+    L = os.path.splitext(os.path.split(args.model)[-1])[0].split('_L')[-1]
+    if L=='All':
+        which_layers = [1,2,3]
+    else:
+        which_layers = [int(L)]
+
+    X_adv_agg = aggregate_features(model, X_adv, which_layers)
+    prediction = np.argmax(np.bincount(np.array(clf.predict(X_adv_agg), dtype='int')))
+    print 'Predicted label on adversarial example (classifier trained on aggregated features from last layer of dnn): ', prediction
+
+
 
