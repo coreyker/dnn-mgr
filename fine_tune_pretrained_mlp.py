@@ -43,20 +43,20 @@ def get_mlp(nvis, nclasses, pretrained_layers):
 def get_trainer(model, trainset, validset, save_path):
   
   monitoring  = dict(valid=validset, train=trainset)
-  termination = MonitorBased(channel_name='valid_y_misclass', prop_decrease=.001, N=10)
+  termination = MonitorBased(channel_name='valid_y_misclass', prop_decrease=.001, N=100)
   extensions  = [MonitorBasedSaveBest(channel_name='valid_y_misclass', save_path=save_path),
-                #MomentumAdjustor(start=1, saturate=50, final_momentum=.9),
-                LinearDecayOverEpoch(start=1, saturate=50, decay_factor=0.01)]
+                #MomentumAdjustor(start=1, saturate=100, final_momentum=.9),
+                LinearDecayOverEpoch(start=1, saturate=200, decay_factor=0.01)]
 
   config = {
   'learning_rate': .01,
   #'learning_rule': Momentum(0.5),
   'learning_rule': RMSProp(),
   'train_iteration_mode': 'shuffled_sequential',
-  'batch_size': 250,
+  'batch_size': 1200,#250,
   #'batches_per_iter' : 100,
   'monitoring_dataset': monitoring,
-  'monitor_iteration_mode' : 'sequential',
+  'monitor_iteration_mode' : 'shuffled_sequential',
   'termination_criterion' : termination,
   }
 
