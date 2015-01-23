@@ -88,16 +88,16 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
 
     return Y
 
-def file_misclass_error_printf(model, dataset, save_file, mode='all_same', label=0, snr=30, label_list=None):
+def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None):
     """
     Function to compute the file-level classification error by classifying
     individual frames and then voting for the class with highest cumulative probability
     """
     n_classes  = len(dataset.targets)
-    feat_space = model.get_input_space()
+    feat_space = dnn_model.get_input_space()
 
     X     = feat_space.make_theano_batch()
-    Y     = model.fprop(X)
+    Y     = dnn_model.fprop(X)
     fprop = theano.function([X],Y)
     
     n_examples   = len(dataset.file_list)
@@ -105,8 +105,12 @@ def file_misclass_error_printf(model, dataset, save_file, mode='all_same', label
     data_specs   = (CompositeSpace((feat_space, target_space)), ("songlevel-features", "targets"))     
     iterator     = dataset.iterator(mode='sequential', batch_size=1, data_specs=data_specs)
 
+    if aux_model:
+        aux_fname = open(aux_save_file, 'w')
+        aux_writer = csv.writer(aux_fname, delimiter='\t')
+
     with open(save_file, 'w') as fname:
-        csvwriter = csv.writer(fname, delimiter='\t')
+        dnn_writer = csv.writer(fname, delimiter='\t')
         for i,el in enumerate(iterator):
 
             # display progress indicator
@@ -123,21 +127,40 @@ def file_misclass_error_printf(model, dataset, save_file, mode='all_same', label
             elif mode == 'random':
                 target = np.random.randint(n_classes)
 
-            fft_data = find_adversary(model, fft_data, target, mu=.1, epsilon=epsilon, maxits=100, stop_thresh=0.95)
+            fft_data = find_adversary(dnn_model, fft_data, target, mu=.1, epsilon=epsilon, maxits=100, stop_thresh=0.95)
 
             frame_labels = np.argmax(fprop(fft_data), axis=1)
             hist         = np.bincount(frame_labels, minlength=n_classes)
             
-            if label_list: # use-string labels
-                vote_label   = label_list[np.argmax(hist)] # most used label
-                true_label   = dataset.label_list[el[1]]#np.argmax(el[1])
-            else: # use numeric labels
-                vote_label   = np.argmax(hist) # most used label
-                true_label   = el[1] #np.argmax(el[1])
+            dnn_label   = np.argmax(hist) # most used label
+            true_label   = el[1] #np.argmax(el[1])
 
-            csvwriter.writerow([dataset.file_list[i], true_label, vote_label])            
+            dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label]) 
+
+            if aux_model:
+                fft_agg  = aggregate_features(dnn_model, fft_data, which_layers)
+                aux_vote = np.argmax(np.bincount(np.array(aux_model.predict(fft_agg), dtype='int')))
+                aux_writer.writerow([dataset.file_list[i], true_label, aux_vote]) 
+
+    if aux_model:
+        aux_fname.close()
     print ''
 
+def aggregate_features(model, X, which_layers=[3], win_size=200, step=100):
+    assert np.max(which_layers) < len(model.layers)
+
+    n_classes, n_examples = model.get_output_space().dim, X.shape[0] 
+    in_batch    = model.get_input_space().make_theano_batch()    
+    fprop       = theano.function([in_batch], model.fprop(in_batch, return_all=True))
+    output_data = fprop(X)
+    feats       = np.hstack([output_data[i] for i in which_layers])
+
+    agg_feat = []
+    for i in xrange(0, feats.shape[0]-win_size, step):
+        chunk = feats[i:i+win_size,:]
+        agg_feat.append(np.hstack((np.mean(chunk, axis=0), np.std(chunk, axis=0))))
+        
+    return np.vstack(agg_feat)
 
 if __name__ == '__main__':
     '''
@@ -149,22 +172,41 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
     description='''Script to find/test adversarial examples with a dnn''')
     parser.add_argument('--dnn_model', help='dnn model to use for features')
-    #parser.add_argument('--model', help='model trained on dnn features (e.g. random forest)')
-    
+    parser.add_argument('--aux_model', help='(optional) auxiliary model trained on dnn features (e.g. random forest)')
+    parser.add_argument('--which_layers', nargs='*', type=int, help='(optional) layer(s) from dnn to be passed to auxiliary model')
+
     # three variants
     parser.add_argument('--mode', help='either all_same, perfect, or random')
     parser.add_argument('--label', type=int, help='label to minimize loss on (only used in all_same mode)')
     
-    parser.add_argument('--save_file', help='txt file to save results in')
+    parser.add_argument('--dnn_save_file', help='txt file to save results in')
+    parser.add_argument('--aux_save_file', help='txt file to save results in')
     args = parser.parse_args()
 
     assert args.mode in ['all_same', 'perfect', 'random'] 
-    if args.label is None:
-        args.label = 0        
+    if args.mode == 'all_same' and not args.label:
+        parser.error('--label x must be specified together with all_same mode')
+    if args.aux_model and not args.which_layers:
+        parser.error('--which_layers x1 x2 ... must be specified together with aux_model')
+    if args.aux_model and not args.aux_save_file:
+        parser.error('--aux_save_file x must be specified together with --aux_model')      
 
-    model = serial.load(args.dnn_model)
+    dnn_model = serial.load(args.dnn_model)
     p = re.compile(r"which_set.*'(train)'")
-    dataset_yaml = p.sub("which_set: 'test'", model.dataset_yaml_src)
+    dataset_yaml = p.sub("which_set: 'test'", dnn_model.dataset_yaml_src)
     testset = yaml_parse.load(dataset_yaml)
 
-    file_misclass_error_printf(model, testset, args.save_file, args.mode, args.label, snr=30, label_list=None)
+    if args.aux_model:
+        aux_model = joblib.load(args.aux_model)
+    else:
+        aux_model = None
+
+    file_misclass_error_printf(dnn_model=dnn_model, 
+        dataset=testset, 
+        save_file=args.dnn_save_file, 
+        mode=args.mode, 
+        label=args.label, 
+        snr=30, 
+        aux_model=aux_model, 
+        aux_save_file=args.aux_save_file, 
+        which_layers=args.which_layers)

@@ -49,10 +49,11 @@ def save_conf_mat(confusion, title):
     ax.set_aspect(1)
     ax.imshow(np.array(augmented_confusion), cmap=plt.cm.gray_r, interpolation='nearest')
 
+    thresh = np.max(augmented_confusion)
     width,height = augmented_confusion.shape
     for x in xrange(width):
         for y in xrange(height):
-            if augmented_confusion[x][y]<50:
+            if augmented_confusion[x][y]<thresh/2:
                 color='k'
             else:
                 color='w'
@@ -87,10 +88,11 @@ def plot_ave_conf_mat(confusion_matrices, title):
     ax.set_aspect(1)
     ax.imshow(np.array(ave_confusion), cmap=plt.cm.gray_r, interpolation='nearest')
 
+    thresh = np.max(ave_confusion)
     width,height = ave_confusion.shape
     for x in xrange(width):
         for y in xrange(height):
-            if ave_confusion[x][y]<50:
+            if ave_confusion[x][y]<thresh/2:#50:
                 color='k'
             else:
                 color='w'

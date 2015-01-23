@@ -1,5 +1,6 @@
 import os, argparse
 import scikits.audiolab as audiolab
+from matplotlib import pyplot as plt
 from sklearn.externals import joblib
 import numpy as np
 import theano
@@ -10,7 +11,7 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
-def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5):
+def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5):
     '''
     Solves:
 
@@ -62,6 +63,7 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
     # projected gradient:
     last_pred = 0
     Y = np.copy(X0)
+    delta = 0
     for i in xrange(maxits):        
 
         # gradient step
@@ -69,12 +71,15 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
 
         # non-negative projection
         Z = Z * (Z>=0)
+
+        if P0 is not None:
+            Y, P0 = griffin_lim(np.hstack((Y, Y[:,-2:-nfft/2-1:-1])), P0, its=4)
         
         # maximum allowable signal-to-noise projection
         nu = np.linalg.norm(Z-X0)/n_examples/epsilon - 1 # lagrange multiplier
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
-
+        
         # stopping condition
         pred = np.sum(fprop(Y), axis=0)
         pred /= np.sum(pred)
@@ -86,7 +91,7 @@ def find_adversary(model, X0, label, mu=.1, epsilon=.25, maxits=10, stop_thresh=
             break
         last_pred = pred[label]
 
-    return Y
+    return Y, P0
 
 def compute_fft(x, nfft=1024, nhop=512):
   
@@ -109,20 +114,23 @@ def overlap_add(X, nfft=1024, nhop=512):
 
     for i, frame in enumerate(X):
         sup = i*nhop + np.arange(nfft)
-        x[sup] += np.real(np.fft.ifft(frame)) # *window
-        win_sum[sup] += window #**2 # ensure perfect reconstruction
+        x[sup] += np.real(np.fft.ifft(frame)) * window
+        win_sum[sup] += window **2 # ensure perfect reconstruction
     
     return x/(win_sum + 1e-12)
 
-# def griffin_lim(X, nits=4, nfft=1024, nhop=512):
+def griffin_lim(Mag, Phs=None, its=4, nfft=1024, nhop=512):
+    if Phs is None:
+        Phs = np.pi * np.random.randn(*Mag.shape)
 
-#     X0 = np.abs(X)
-#     x  = overlap_add(X, nfft, nhop)
-#     for i in xrange(nits):
-#         _, Phs = compute_fft(x, nfft, nhop)
-#         X = X0 * np.exp(1j*Phs)
-#         x = overlap_add(X0, nfft, nhop)
-#     return x
+    x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
+    for i in xrange(its):
+        _, Phs = compute_fft(x, nfft, nhop)
+        x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
+
+    Mag, Phs = compute_fft(x, nfft, nhop)
+    return np.array(Mag[:,:nfft//2+1], dtype=np.float32), Phs
+
 
 def aggregate_features(model, X, which_layers=[3], win_size=200, step=100):
     assert np.max(which_layers) < len(model.layers)
@@ -164,6 +172,8 @@ if __name__ == '__main__':
     nfft = 2*(input_space.dim-1)
     nhop = nfft//2
     x, fs, fmt = audiolab.wavread(args.test_file)
+    s1 = np.copy(x)
+
     Mag, Phs = compute_fft(x, nfft, nhop)
 
     X0 = Mag[:,:input_space.dim]
@@ -172,16 +182,16 @@ if __name__ == '__main__':
 
     snr = 30
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20)
-    X_adv = find_adversary(model, X0, args.label, mu=.05, epsilon=epsilon, maxits=100, stop_thresh=0.95)
+    X_adv, P_adv = find_adversary(model, X0, args.label, Phs, mu=.01, epsilon=epsilon, maxits=100, stop_thresh=0.51)
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
     print 'Predicted label on adversarial example (before re-synthesis):', prediction
 
     # reconstruct time-domain sound
-    x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*Phs), nfft, nhop)
-    #x_adv = griffin_lim( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*Phs), 10, nfft, nhop)
-    audiolab.wavwrite(x_adv, '/tmp/adversary.wav', fs, fmt)
+    x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
+    out_file = os.path.join('/tmp', os.path.splitext(os.path.split(args.test_file)[-1])[0] + '.adversary.wav')
+    audiolab.wavwrite(x_adv, out_file, fs, fmt)
 
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
     prediction = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
@@ -199,5 +209,92 @@ if __name__ == '__main__':
     prediction = np.argmax(np.bincount(np.array(clf.predict(X_adv_agg), dtype='int')))
     print 'Predicted label on adversarial example (classifier trained on aggregated features from last layer of dnn): ', prediction
 
+    if 0:
+        ## Time-domain waveforms
+        ## ------------------------------------------------------------------------
+        plt.ion()
+        X_metal, P_metal = find_adversary(model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
+        x_metal=overlap_add( np.hstack((X_metal, X_metal[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_metal))
+        
+        L = min(len(x), len(x_metal))
+        n = x[:L] - x_metal[:L]
+
+        N = 512
+        sup = np.arange(N)
+
+        offsets = np.sort(np.random.randint(0, L-N, 6))
+        for i,offset in enumerate(offsets):
+            plt.subplot(6,1,i)
+            plt.plot(sup, n[offset+sup],  '-', color=(1,0.6,0.1,1), linewidth=1) 
+            plt.plot(sup, x[offset+sup], '-', color=(.4,.6,1,0.6), linewidth=6)
+            plt.plot(sup, x_metal[offset+sup], '-', color=(0,0,0,1), linewidth=1)        
+            plt.axis('tight')
+            plt.axis('off')
+
+        plt.savefig(os.path.splitext(out_file)[0] + '.pdf', format='pdf')
+        
+        ## Spectrum
+        ## ------------------------------------------------------------------------    
+        N = 50
+        X_metal, P_metal = find_adversary(model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
+
+        X_classical, P_classical = find_adversary(model, X0, 1, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)
+        assert(np.argmax(fprop(X_classical[N:N+1,:]))==1)
+
+        X_disco, P_disco = find_adversary(model, X0, 3, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)
+        assert(np.argmax(fprop(X_disco)[N:N+1,:])==3)
 
 
+        plt.figure()
+        plt.gcf().set_tight_layout(True)
+
+        ylim = (-60,40)
+        plt.subplot(3,1,1)    
+        plt.xlabel('(a)')
+        plt.ylabel('dB')
+
+        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.plot(20*np.log10(X_metal[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.plot(20*np.log10(np.abs(X0[N,:]-X_metal[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.subplot(3,1,2)
+        plt.xlabel('(b)')
+        plt.ylabel('dB')
+
+        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.plot(20*np.log10(X_classical[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.axis('tight')
+        plt.ylim(ylim)    
+        
+        plt.plot(20*np.log10(np.abs(X0[N,:]-X_classical[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.subplot(3,1,3)
+        plt.xlabel('(c)')
+        plt.ylabel('dB')
+
+        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
+
+        plt.plot(20*np.log10(X_disco[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.axis('tight')
+        plt.ylim(ylim)
+        
+        plt.plot(20*np.log10(np.abs(X0[N,:]-X_disco[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.axis('tight')
+        plt.ylim(ylim)
