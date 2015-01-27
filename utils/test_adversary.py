@@ -11,7 +11,7 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
-def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5):
+def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5, griffin_lim=False):
     '''
     Solves:
 
@@ -48,7 +48,7 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     label - an incorrect label
     '''
     # convert integer label into one-hot vector
-    n_classes, n_examples = model.get_output_space().dim, X0.shape[0]     
+    n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
     one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
     one_hot[:,label]      = 1
 
@@ -62,40 +62,52 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
 
     # projected gradient:
     last_pred = 0
+    #Y = np.array(np.random.rand(*X0.shape), dtype=np.float32) 
     Y = np.copy(X0)
-    delta = 0
+    Y_old = np.copy(Y)
+    t_old = 1
     for i in xrange(maxits):        
 
         # gradient step
         Z = Y - mu * n_examples * grad(Y, one_hot)
 
         # non-negative projection
-        Z = Z * (Z>=0)
+        Z = Z * (Z>0)
 
-        if P0 is not None:
-            Y, P0 = griffin_lim(np.hstack((Y, Y[:,-2:-nfft/2-1:-1])), P0, its=4)
+        if griffin_lim:
+            Z, P0 = griffin_lim_proj(np.hstack((Z, Z[:,-2:-nfft/2-1:-1])), P0, its=0)
         
         # maximum allowable signal-to-noise projection
-        nu = np.linalg.norm(Z-X0)/n_examples/epsilon - 1 # lagrange multiplier
+        nu = np.linalg.norm((Z-X0))/n_examples/epsilon - 1 # lagrange multiplier
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
         
+        # FISTA momentum
+        t = .5 + np.sqrt(1+4*t_old**2)/2.
+        alpha = (t_old - 1)/t
+        Y += alpha * (Y - Y_old)
+        Y_old = np.copy(Y)
+        t_old = t
+
         # stopping condition
         pred = np.sum(fprop(Y), axis=0)
         pred /= np.sum(pred)
 
-        print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
+        #print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
+        print 'iteration: {}, pred[label]: {}, nu: {}, snr: {}'.format(i, pred[label], nu, 20*np.log10(np.linalg.norm(X0)/np.linalg.norm(Y-X0)))
+
         if pred[label] > stop_thresh:
             break
-        elif pred[label] < last_pred:
+        elif pred[label] < last_pred + 1e-4:
             break
         last_pred = pred[label]
 
     return Y, P0
 
+winfunc = lambda x: np.hanning(x)
 def compute_fft(x, nfft=1024, nhop=512):
   
-    window   = np.hanning(nfft)
+    window   = winfunc(nfft)
     nframes  = (len(x)-nfft)//nhop
     fft_data = np.zeros((nframes, nfft))
 
@@ -108,7 +120,7 @@ def compute_fft(x, nfft=1024, nhop=512):
 
 def overlap_add(X, nfft=1024, nhop=512):
 
-    window = np.hanning(nfft) # must use same window as compute_fft
+    window = winfunc(nfft) # must use same window as compute_fft
     x = np.zeros( X.shape[0]*(nhop+1) )
     win_sum = np.zeros( X.shape[0]*(nhop+1) )
 
@@ -119,7 +131,7 @@ def overlap_add(X, nfft=1024, nhop=512):
     
     return x/(win_sum + 1e-12)
 
-def griffin_lim(Mag, Phs=None, its=4, nfft=1024, nhop=512):
+def griffin_lim_proj(Mag, Phs=None, its=4, nfft=1024, nhop=512):
     if Phs is None:
         Phs = np.pi * np.random.randn(*Mag.shape)
 
@@ -158,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument('dnn_model', help='dnn model to use for features')
     parser.add_argument('model', help='model trained on dnn features')
     parser.add_argument('test_file', help='file to test model on')
-    parser.add_argument('label', help='target to aim for')
+    parser.add_argument('label', type=int, help='target to aim for')
 
     args = parser.parse_args()
 
@@ -180,9 +192,18 @@ if __name__ == '__main__':
     prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
-    snr = 30
-    epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20)
-    X_adv, P_adv = find_adversary(model, X0, args.label, Phs, mu=.01, epsilon=epsilon, maxits=100, stop_thresh=0.51)
+    snr = 15
+    epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20.)
+    #epsilon = np.linalg.norm(np.mean(X0,axis=0))/10**(snr/20)
+    X_adv, P_adv = find_adversary(model=model, 
+        X0=X0, 
+        label=args.label, 
+        P0=Phs, 
+        mu=.1, 
+        epsilon=epsilon, 
+        maxits=50, 
+        stop_thresh=0.9, 
+        griffin_lim=True)
 
     # test advesary
     prediction = np.argmax(np.sum(fprop(X_adv), axis=0))

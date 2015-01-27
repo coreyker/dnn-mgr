@@ -186,7 +186,7 @@ class FramelevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:                    
-                    X = data[index:index+self._dataset.tframes, :]
+                    X = np.abs(data[index:index+self._dataset.tframes, :])
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
 
@@ -221,7 +221,7 @@ class SonglevelIterator(FiniteDatasetIterator):
         spaces, sources = self._data_specs
         output = []                
 
-        for data, fn, source in safe_izip(self._raw_data, self._convert, sources):
+        for data, fn, source, space in safe_izip(self._raw_data, self._convert, sources, spaces.components):
             if source=='targets':
                 # if fn:
                 #     output.append( fn( np.reshape(data[next_index[0], :], (1,-1)) ) )
@@ -230,8 +230,12 @@ class SonglevelIterator(FiniteDatasetIterator):
                 output.append( target )
             else:
                 design_mat = []
-                for index in next_index:                    
-                    X = data[index:index+self._dataset.tframes, :]
+                for index in next_index:
+                    if space.dtype=='complex64':
+                        X = data[index:index+self._dataset.tframes, :] # return phase too
+                    else:
+                        X = np.abs(data[index:index+self._dataset.tframes, :])
+
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
 
@@ -306,18 +310,21 @@ class PreprocLayer(PretrainedLayer):
 if __name__=='__main__':
 
     # tests
+    import theano
     import cPickle
+    from audio_dataset import AudioDataset
 
-    with open('/Users/cmke/Datasets/tzanetakis_genre/tzanetakis_genre-fold-1_of_4.pkl') as f: 
+    with open('GTZAN_stratified.pkl') as f: 
         config = cPickle.load(f)
     
     D = AudioDataset(config)
     
-    feat_space   = VectorSpace(dim=D.X.shape[1])    
+    feat_space   = VectorSpace(dim=D.X.shape[1])
+    feat_space_complex = VectorSpace(dim=D.X.shape[1], dtype='complex64')
     target_space = VectorSpace(dim=len(D.label_list))
     
     data_specs_frame = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
-    data_specs_song = (CompositeSpace((feat_space,target_space)), ("songlevel-features", "targets"))
+    data_specs_song = (CompositeSpace((feat_space_complex, target_space)), ("songlevel-features", "targets"))
 
     framelevel_it = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs_frame)
     frame_batch = framelevel_it.next()

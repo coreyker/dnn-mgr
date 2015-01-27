@@ -74,9 +74,10 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
     hdf5_file  = tables.open_file(hdf5_save_name, mode = "w")
     data_node  = hdf5_file.create_group(hdf5_file.root, "Data", "Data")
     data_atom  = tables.Float32Atom() if theano.config.floatX == 'float32' else tables.Float64Atom()
+    data_atom_complex = tables.ComplexAtom(8) if theano.config.floatX == 'float32' else tables.ComplexAtom(16)
 
     # data nodes
-    hdf5_file.create_earray(data_node, 'X', atom=data_atom, shape=(0,nfft/2+1), title="features")
+    hdf5_file.create_earray(data_node, 'X', atom=data_atom_complex, shape=(0,nfft/2+1), title="features")
     hdf5_file.create_earray(data_node, 'y', atom=data_atom, shape=(0,len(label_list)), title="targets")
 
     targets = range(len(label_list))
@@ -104,10 +105,10 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
                 sup = i*nhop + np.arange(nfft)
                 fft_data[i,:] = audio_data[sup] * window
             
-            fft_data = np.abs(np.fft.fft(fft_data))
+            fft_data = np.fft.fft(fft_data)
 
             # write dft frames to hdf5 file
-            data_node.X.append(fft_data[:, :nfft/2+1])
+            data_node.X.append(fft_data[:, :nfft/2+1]) # keeping phase too            
 
             # write target values to hdf5 file
             one_hot = np.zeros((nframes, len(label_list)))
@@ -132,7 +133,7 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
     param_node.file_dict.append(file_dict)
 
     hdf5_file.create_vlarray(param_node, 'fft', atom=param_atom, title='fft')
-    param_node.fft.append({'nfft':nfft, 'nhop':nhop})
+    param_node.fft.append({'nfft':nfft, 'nhop':nhop, 'window':window})
 
     hdf5_file.create_vlarray(param_node, 'label_list', atom=param_atom, title='label_list')
     param_node.label_list.append(label_list)
@@ -264,7 +265,7 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
             sys.stdout.flush()
             for j in xrange(tframes):                       
                 
-                fft_frame = data.X[i+j,:]
+                fft_frame = np.abs(data.X[i+j,:])
                 sum_x  += fft_frame
                 sum_x2 += fft_frame**2
         print ''
@@ -283,7 +284,7 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
             sys.stdout.flush()
             for j in xrange(tframes):                       
                 
-                fft_frame = data.X[i+j,:]
+                fft_frame = np.abs(data.X[i+j,:])
                 X = np.reshape(fft_frame - mean, (len(fft_frame), 1))
                 XX += X.dot(X.T)
         print ''
@@ -349,8 +350,8 @@ if __name__=='__main__':
     args = parser.parse_args()
     
     # check validity of arugments
-    if len(sys.argv) < 3:
-        parser.error('must specify either --train,--valid,--test files or --train_prop, --valid_prop, --test_prop')
+    # if len(sys.argv) < 3:
+    #     parser.error('must specify either --train,--valid,--test files or --train_prop, --valid_prop, --test_prop')
 
     if (args.train is not None or args.valid is not None or args.test is not None) \
     and (args.train_prop is not None or args.valid_prop is not None or args.test_prop is not None):

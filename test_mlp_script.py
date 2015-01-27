@@ -75,7 +75,7 @@ def file_misclass_error(model, dataset):
         sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
         sys.stdout.flush()
     
-        fft_data     = np.array(el[0], dtype=np.float32)
+        fft_data     = np.abs(np.array(el[0], dtype=np.float32))
         frame_labels = np.argmax(fprop(fft_data), axis=1)
         hist         = np.bincount(frame_labels, minlength=n_classes)
         vote_label   = np.argmax(hist) # most used label
@@ -112,7 +112,7 @@ def file_misclass_error_printf(model, dataset, save_file, label_list=None):
             sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
             sys.stdout.flush()
         
-            fft_data     = np.array(el[0], dtype=np.float32)
+            fft_data     = np.abs(np.array(el[0], dtype=np.float32))
             frame_labels = np.argmax(fprop(fft_data), axis=1)
             hist         = np.bincount(frame_labels, minlength=n_classes)
             
