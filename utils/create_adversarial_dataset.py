@@ -67,12 +67,12 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
 
             dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label]) 
 
-            print 'Mode: {}, True label: {}, Adversarial label: {}'.format(mode, true_label, dnn_label)
+            print 'Mode: {}, True label: {}, DNN adversarial label: {}'.format(mode, true_label, dnn_label)
             if aux_model:
                 fft_agg  = aggregate_features(dnn_model, X_adv, which_layers)
                 aux_vote = np.argmax(np.bincount(np.array(aux_model.predict(fft_agg), dtype='int')))
                 aux_writer.writerow([dataset.file_list[i], true_label, aux_vote]) 
-
+                print 'AUX adversarial label: {}'.format(aux_vote)
     if aux_model:
         aux_fname.close()
     print ''

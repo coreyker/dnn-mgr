@@ -168,22 +168,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
     description='''Script to find/test adversarial examples with a dnn''')
     parser.add_argument('dnn_model', help='dnn model to use for features')
-    parser.add_argument('model', help='model trained on dnn features')
+    parser.add_argument('aux_model', help='(auxilliary) model trained on dnn features')
     parser.add_argument('test_file', help='file to test model on')
     parser.add_argument('label', type=int, help='target to aim for')
 
     args = parser.parse_args()
 
     # load model, fprop function
-    model       = serial.load(args.dnn_model)
-    input_space = model.get_input_space()
+    dnn_model   = serial.load(args.dnn_model)
+    input_space = dnn_model.get_input_space()
     batch       = input_space.make_theano_batch()
-    fprop       = theano.function([batch], model.fprop(batch))
+    fprop       = theano.function([batch], dnn_model.fprop(batch))
 
     # compute fft of data
     nfft = 2*(input_space.dim-1)
     nhop = nfft//2
     x, fs, fmt = audiolab.wavread(args.test_file)
+    
+    # smooth boundaries to prevent a click
+    win = np.hanning(1024)
+    x[:512] *= win[:512]
+    x[-512:] *= win[512:]
+    
     s1 = np.copy(x)
 
     Mag, Phs = compute_fft(x, nfft, nhop)
@@ -192,16 +198,16 @@ if __name__ == '__main__':
     prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
-    snr = 15
+    snr = 15.
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20.)
     #epsilon = np.linalg.norm(np.mean(X0,axis=0))/10**(snr/20)
-    X_adv, P_adv = find_adversary(model=model, 
+    X_adv, P_adv = find_adversary(model=dnn_model, 
         X0=X0, 
         label=args.label, 
         P0=Phs, 
         mu=.1, 
         epsilon=epsilon, 
-        maxits=50, 
+        maxits=100, 
         stop_thresh=0.9, 
         griffin_lim=True)
 
@@ -219,22 +225,22 @@ if __name__ == '__main__':
     print 'Predicted label on adversarial example (after re-synthesis): ', prediction
 
     # now try with classifier trained on last layer of dnn features
-    clf = joblib.load(args.model)
-    L   = os.path.splitext(os.path.split(args.model)[-1])[0].split('_L')[-1]
+    aux_model = joblib.load(args.aux_model)
+    L   = os.path.splitext(os.path.split(args.aux_model)[-1])[0].split('_L')[-1]
     if L=='All':
         which_layers = [1,2,3]
     else:
         which_layers = [int(L)]
 
-    X_adv_agg = aggregate_features(model, X_adv, which_layers)
-    prediction = np.argmax(np.bincount(np.array(clf.predict(X_adv_agg), dtype='int')))
+    X_adv_agg = aggregate_features(dnn_model, X_adv, which_layers)
+    prediction = np.argmax(np.bincount(np.array(aux_model.predict(X_adv_agg), dtype='int')))
     print 'Predicted label on adversarial example (classifier trained on aggregated features from last layer of dnn): ', prediction
 
     if 0:
         ## Time-domain waveforms
         ## ------------------------------------------------------------------------
         plt.ion()
-        X_metal, P_metal = find_adversary(model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
         assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
         x_metal=overlap_add( np.hstack((X_metal, X_metal[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_metal))
         
@@ -258,13 +264,13 @@ if __name__ == '__main__':
         ## Spectrum
         ## ------------------------------------------------------------------------    
         N = 50
-        X_metal, P_metal = find_adversary(model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
         assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
 
-        X_classical, P_classical = find_adversary(model, X0, 1, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)
+        X_classical, P_classical = find_adversary(dnn_model, X0, 1, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)
         assert(np.argmax(fprop(X_classical[N:N+1,:]))==1)
 
-        X_disco, P_disco = find_adversary(model, X0, 3, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)
+        X_disco, P_disco = find_adversary(dnn_model, X0, 3, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)
         assert(np.argmax(fprop(X_disco)[N:N+1,:])==3)
 
 
