@@ -108,7 +108,7 @@ winfunc = lambda x: np.hanning(x)
 def compute_fft(x, nfft=1024, nhop=512):
   
     window   = winfunc(nfft)
-    nframes  = (len(x)-nfft)//nhop
+    nframes  = int((len(x)-nfft)//nhop + 1)
     fft_data = np.zeros((nframes, nfft))
 
     for i in xrange(nframes):
@@ -121,8 +121,9 @@ def compute_fft(x, nfft=1024, nhop=512):
 def overlap_add(X, nfft=1024, nhop=512):
 
     window = winfunc(nfft) # must use same window as compute_fft
-    x = np.zeros( X.shape[0]*(nhop+1) )
-    win_sum = np.zeros( X.shape[0]*(nhop+1) )
+    L = X.shape[0]*nhop + (nfft-nhop)
+    x = np.zeros(L)
+    win_sum = np.zeros(L)
 
     for i, frame in enumerate(X):
         sup = i*nhop + np.arange(nfft)
@@ -167,10 +168,11 @@ if __name__ == '__main__':
     '''
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
     description='''Script to find/test adversarial examples with a dnn''')
-    parser.add_argument('dnn_model', help='dnn model to use for features')
-    parser.add_argument('aux_model', help='(auxilliary) model trained on dnn features')
-    parser.add_argument('test_file', help='file to test model on')
-    parser.add_argument('label', type=int, help='target to aim for')
+    parser.add_argument('--dnn_model', help='dnn model to use for features')
+    parser.add_argument('--aux_model', help='(auxilliary) model trained on dnn features')
+    parser.add_argument('--test_file', help='file to test model on')
+    parser.add_argument('--label', type=int, help='target to aim for')
+    parser.add_argument('--out_path', help='location for saving adversary (name automatically generated)')
 
     args = parser.parse_args()
 
@@ -180,75 +182,104 @@ if __name__ == '__main__':
     batch       = input_space.make_theano_batch()
     fprop       = theano.function([batch], dnn_model.fprop(batch))
 
+    # load audio file
+    x, fs, fmt = audiolab.wavread(args.test_file)
+    
+    # make sure format agrees with training data
+    if x.shape[1]!=1:
+        print 'making mono:'
+        x = np.sum(x, axis=1)/2. # mono
+    if fs != 22050:
+        print 'resampling to 22050 hz:'
+        import scikits.samplerate as samplerate
+        x = samplerate.resample(x, 22050./fs, 'sinc_best')
+        fs = 22050
+
     # compute fft of data
     nfft = 2*(input_space.dim-1)
     nhop = nfft//2
-    x, fs, fmt = audiolab.wavread(args.test_file)
-    
-    # smooth boundaries to prevent a click
-    win = np.hanning(1024)
-    x[:512] *= win[:512]
-    x[-512:] *= win[512:]
-    
-    s1 = np.copy(x)
+    nframes = (len(x)-nfft)/nhop
+    x = x[:(nframes-1)*nhop + nfft] # truncate input to multiple of hopsize
 
+    # smooth boundaries to prevent a click
+    win = winfunc(1024)
+    x[:512]  *= win[:512]
+    x[-512:] *= win[512:]
     Mag, Phs = compute_fft(x, nfft, nhop)
 
     X0 = Mag[:,:input_space.dim]
     prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
-    snr = 15.
+    snr = 20.
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20.)
     #epsilon = np.linalg.norm(np.mean(X0,axis=0))/10**(snr/20)
     X_adv, P_adv = find_adversary(model=dnn_model, 
         X0=X0, 
         label=args.label, 
         P0=Phs, 
-        mu=.1, 
+        mu=.05, 
         epsilon=epsilon, 
         maxits=100, 
-        stop_thresh=0.9, 
+        stop_thresh=0.51, 
         griffin_lim=True)
 
     # test advesary
-    prediction = np.argmax(np.sum(fprop(X_adv), axis=0))
-    print 'Predicted label on adversarial example (before re-synthesis):', prediction
+    p1 = np.argmax(np.sum(fprop(X_adv), axis=0))
+    print 'Predicted label on adversarial example (before re-synthesis):', p1
 
     # reconstruct time-domain sound
     x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
-    out_file = os.path.join('/tmp', os.path.splitext(os.path.split(args.test_file)[-1])[0] + '.adversary.wav')
-    audiolab.wavwrite(x_adv, out_file, fs, fmt)
 
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
-    prediction = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
-    print 'Predicted label on adversarial example (after re-synthesis): ', prediction
+    p2 = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
+    print 'Predicted label on adversarial example (after re-synthesis): ', p2
 
-    # now try with classifier trained on last layer of dnn features
-    aux_model = joblib.load(args.aux_model)
-    L   = os.path.splitext(os.path.split(args.aux_model)[-1])[0].split('_L')[-1]
-    if L=='All':
-        which_layers = [1,2,3]
-    else:
-        which_layers = [int(L)]
+    if args.aux_model: # now try with classifier trained on dnn features
+        aux_model = joblib.load(args.aux_model)
+        L = os.path.splitext(os.path.split(args.aux_model)[-1])[0].split('_L')[-1]
+        if L=='All':
+            which_layers = [1,2,3]
+        else:
+            which_layers = [int(L)]
 
-    X_adv_agg = aggregate_features(dnn_model, X_adv, which_layers)
-    prediction = np.argmax(np.bincount(np.array(aux_model.predict(X_adv_agg), dtype='int')))
-    print 'Predicted label on adversarial example (classifier trained on aggregated features from last layer of dnn): ', prediction
+        X_adv_agg = aggregate_features(dnn_model, X_adv, which_layers)
+        p3 = np.argmax(np.bincount(np.array(aux_model.predict(X_adv_agg), dtype='int')))
+        print 'Predicted label on adversarial example (classifier trained on aggregated features from last layer of dnn): ', p3
+
+
+    if args.out_path:        
+        out_snr   = 20*np.log10(np.linalg.norm(x[nfft:-nfft]) / np.linalg.norm(x[nfft:-nfft]-x_adv[nfft:-nfft]))
+        label_list = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
+        
+        out_label1 = label_list[p2]
+        out_file1 = os.path.join(args.out_path, 'dnn',
+            '{fname}.{label}_adversary.{snr}dB.dnn.wav'.format(fname=os.path.splitext(os.path.split(args.test_file)[-1])[0],
+            label=out_label1,
+            snr=int(out_snr+.5)))
+        audiolab.wavwrite(x_adv, out_file1, fs, fmt)
+
+        if args.aux_model:
+            out_label2 = label_list[p3]
+            out_file2 = os.path.join(args.out_path, 'rf', 
+                '{fname}.{label}_adversary.{snr}dB.rf.wav'.format(fname=os.path.splitext(os.path.split(args.test_file)[-1])[0],
+                label=out_label2,
+                snr=int(out_snr+.5)))
+            audiolab.wavwrite(x_adv, out_file2, fs, fmt)
 
     if 0:
         ## Time-domain waveforms
         ## ------------------------------------------------------------------------
         plt.ion()
-        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        N = 512
+        sup = np.arange(N)
+
+        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)        
         assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
         x_metal=overlap_add( np.hstack((X_metal, X_metal[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_metal))
         
         L = min(len(x), len(x_metal))
         n = x[:L] - x_metal[:L]
-
-        N = 512
-        sup = np.arange(N)
 
         offsets = np.sort(np.random.randint(0, L-N, 6))
         for i,offset in enumerate(offsets):
@@ -264,10 +295,10 @@ if __name__ == '__main__':
         ## Spectrum
         ## ------------------------------------------------------------------------    
         N = 50
-        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)        
+        X_metal, P_metal = find_adversary(dnn_model, X0, 6, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)        
         assert(np.argmax(fprop(X_metal[N:N+1,:]))==6)
 
-        X_classical, P_classical = find_adversary(dnn_model, X0, 1, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.95)
+        X_classical, P_classical = find_adversary(dnn_model, X0, 1, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)
         assert(np.argmax(fprop(X_classical[N:N+1,:]))==1)
 
         X_disco, P_disco = find_adversary(dnn_model, X0, 3, Phs, mu=.1, epsilon=epsilon, maxits=200, stop_thresh=0.9)
@@ -276,21 +307,21 @@ if __name__ == '__main__':
 
         plt.figure()
         plt.gcf().set_tight_layout(True)
-
+        x_range = np.arange(513)/513.*22.050
         ylim = (-60,40)
         plt.subplot(3,1,1)    
         plt.xlabel('(a)')
         plt.ylabel('dB')
 
-        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.plot(x_range, 20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
         
-        plt.plot(20*np.log10(X_metal[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.plot(x_range, 20*np.log10(X_metal[N,:]), color=(0,0,0,1), linewidth=1)
         plt.axis('tight')
         plt.ylim(ylim)
         
-        plt.plot(20*np.log10(np.abs(X0[N,:]-X_metal[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.plot(x_range, 20*np.log10(np.abs(X0[N,:]-X_metal[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
         
@@ -298,30 +329,32 @@ if __name__ == '__main__':
         plt.xlabel('(b)')
         plt.ylabel('dB')
 
-        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.plot(x_range, 20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
         
-        plt.plot(20*np.log10(X_classical[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.plot(x_range, 20*np.log10(X_classical[N,:]), color=(0,0,0,1), linewidth=1)
         plt.axis('tight')
         plt.ylim(ylim)    
         
-        plt.plot(20*np.log10(np.abs(X0[N,:]-X_classical[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.plot(x_range, 20*np.log10(np.abs(X0[N,:]-X_classical[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
         
         plt.subplot(3,1,3)
-        plt.xlabel('(c)')
+        plt.xlabel('Frequency (kHz) \n (c)')
         plt.ylabel('dB')
 
-        plt.plot(20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+        plt.plot(x_range, 20*np.log10(X0[N,:]), color=(.4,.6,1,0.8), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
 
-        plt.plot(20*np.log10(X_disco[N,:]), color=(0,0,0,1), linewidth=1)
+        plt.plot(x_range, 20*np.log10(X_disco[N,:]), color=(0,0,0,1), linewidth=1)
         plt.axis('tight')
         plt.ylim(ylim)
         
-        plt.plot(20*np.log10(np.abs(X0[N,:]-X_disco[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+        plt.plot(x_range, 20*np.log10(np.abs(X0[N,:]-X_disco[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
         plt.axis('tight')
         plt.ylim(ylim)
+
+        plt.savefig(os.path.splitext(out_file)[0] + '.spectrum.pdf', format='pdf')
