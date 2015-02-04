@@ -221,7 +221,7 @@ if __name__ == '__main__':
         mu=.05, 
         epsilon=epsilon, 
         maxits=100, 
-        stop_thresh=0.51, 
+        stop_thresh=0.65, 
         griffin_lim=True)
 
     # test advesary
