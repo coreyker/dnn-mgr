@@ -57,18 +57,17 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
                 epsilon=epsilon, 
                 maxits=50, 
                 stop_thresh=0.9, 
-                griffin_lim=griffin_lim)
+                griffin_lim=True)
             
             # if not griffin_lim:
             #     X_adv_valid, _ = griffin_lim_proj(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])), P_adv, its=0)
 
-            pdb.set_trace()
             if save_adversary_audio: 
                 
                 nfft  = 2*(X_adv.shape[1]-1)
                 nhop  = nfft//2      
                 x_adv = overlap_add(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])) * np.exp(1j*P_adv), nfft, nhop)
-                audiolab.wavewrite(x_adv, os.path.join(save_adversary_audio, el[2]), 22050, 'pcm16')
+                audiolab.wavwrite(x_adv, os.path.join(save_adversary_audio, el[2]), 22050, 'pcm16')
 
             frame_labels = np.argmax(fprop(X_adv), axis=1)
             hist         = np.bincount(frame_labels, minlength=n_classes)
