@@ -10,6 +10,7 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
+
 def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None):
     """
     Function to compute the file-level classification error by classifying
@@ -48,7 +49,6 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
             elif mode == 'random':
                 target = np.random.randint(n_classes)
 
-            #fft_data = find_adversary(dnn_model, fft_data, target, mu=.1, epsilon=epsilon, maxits=100, stop_thresh=0.95)
             X_adv, P_adv = find_adversary(model=dnn_model, 
                 X0=Mag, 
                 label=target, 
@@ -57,7 +57,10 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
                 epsilon=epsilon, 
                 maxits=50, 
                 stop_thresh=0.9, 
-                griffin_lim=True)
+                griffin_lim=griffin_lim)
+            
+            # if not griffin_lim:
+            #     X_adv_valid, _ = griffin_lim_proj(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])), P_adv, its=0)
 
             pdb.set_trace()
             if save_adversary_audio: 
