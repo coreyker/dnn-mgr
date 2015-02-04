@@ -10,7 +10,7 @@ from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
-def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None):
+def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None):
     """
     Function to compute the file-level classification error by classifying
     individual frames and then voting for the class with highest cumulative probability
@@ -53,16 +53,24 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
                 X0=Mag, 
                 label=target, 
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
-                mu=.1, 
+                mu=.05, 
                 epsilon=epsilon, 
                 maxits=50, 
                 stop_thresh=0.9, 
                 griffin_lim=True)
 
+            pdb.set_trace()
+            if save_adversary_audio: 
+                
+                nfft  = 2*(X_adv.shape[1]-1)
+                nhop  = nfft//2      
+                x_adv = overlap_add(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])) * np.exp(1j*P_adv), nfft, nhop)
+                audiolab.wavewrite(x_adv, os.path.join(save_adversary_audio, el[2]), 22050, 'pcm16')
+
             frame_labels = np.argmax(fprop(X_adv), axis=1)
             hist         = np.bincount(frame_labels, minlength=n_classes)
             
-            dnn_label   = np.argmax(hist) # most used label
+            dnn_label    = np.argmax(hist) # most used label
             true_label   = el[1] #np.argmax(el[1])
 
             dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label]) 
@@ -246,6 +254,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--dnn_save_file', help='txt file to save results in')
     parser.add_argument('--aux_save_file', help='txt file to save results in')
+    parser.add_argument('--save_adversary_audio', help='path to save adversaries')
+
     args = parser.parse_args()
 
     assert args.mode in ['all_same', 'perfect', 'random'] 
@@ -266,7 +276,8 @@ if __name__ == '__main__':
     else:
         aux_model = None
 
-    file_misclass_error_printf(dnn_model=dnn_model, 
+    file_misclass_error_printf(
+        dnn_model=dnn_model, 
         dataset=testset, 
         save_file=args.dnn_save_file, 
         mode=args.mode, 
@@ -274,4 +285,5 @@ if __name__ == '__main__':
         snr=15., 
         aux_model=aux_model, 
         aux_save_file=args.aux_save_file, 
-        which_layers=args.which_layers)
+        which_layers=args.which_layers,
+        save_adversary_audio=args.save_adversary_audio)
