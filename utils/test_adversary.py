@@ -172,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--aux_model', help='(auxilliary) model trained on dnn features')
     parser.add_argument('--test_file', help='file to test model on')
     parser.add_argument('--label', type=int, help='target to aim for')
+    parser.add_argument('--filter', type=float, help='apply filter to adversary and retest')
     parser.add_argument('--out_path', help='location for saving adversary (name automatically generated)')
 
     args = parser.parse_args()
@@ -186,7 +187,7 @@ if __name__ == '__main__':
     x, fs, fmt = audiolab.wavread(args.test_file)
     
     # make sure format agrees with training data
-    if x.shape[1]!=1:
+    if len(x.shape)!=1:
         print 'making mono:'
         x = np.sum(x, axis=1)/2. # mono
     if fs != 22050:
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
-    snr = 20.
+    snr = 15.
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20.)
     #epsilon = np.linalg.norm(np.mean(X0,axis=0))/10**(snr/20)
     X_adv, P_adv = find_adversary(model=dnn_model, 
@@ -221,7 +222,7 @@ if __name__ == '__main__':
         mu=.05, 
         epsilon=epsilon, 
         maxits=100, 
-        stop_thresh=0.51, 
+        stop_thresh=0.9, 
         griffin_lim=True)
 
     # test advesary
@@ -234,6 +235,15 @@ if __name__ == '__main__':
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
     p2 = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
     print 'Predicted label on adversarial example (after re-synthesis): ', p2
+
+    if args.filter:
+        import scipy as sp
+        b,a = sp.signal.butter(4, args.filter/(fs/2.))
+        x_filt = sp.signal.lfilter(b,a,x_adv)
+
+        Mag_filt,_ = compute_fft(x_filt, nfft, nhop)
+        pf = np.argmax(np.sum(fprop(Mag_filt[:,:input_space.dim]), axis=0))
+        print 'Predicted label on adversarial example (after filter): ', pf
 
     if args.aux_model: # now try with classifier trained on dnn features
         aux_model = joblib.load(args.aux_model)
@@ -266,6 +276,10 @@ if __name__ == '__main__':
                 label=out_label2,
                 snr=int(out_snr+.5)))
             audiolab.wavwrite(x_adv, out_file2, fs, fmt)
+
+
+
+
 
     if 0:
         ## Time-domain waveforms
