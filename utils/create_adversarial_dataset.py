@@ -8,6 +8,7 @@ from pylearn2.utils import serial
 from audio_dataset import AudioDataset
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
+from test_adversary import winfunc, compute_fft, overlap_add, griffin_lim_proj, find_adversary, aggregate_features
 import pdb
 
 
@@ -49,19 +50,23 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
             elif mode == 'random':
                 target = np.random.randint(n_classes)
 
-            X_adv, P_adv = find_adversary(model=dnn_model, 
+            if 1: # re-read audio (seems to be bug when reading from h5)
+                x,_,_ = audiolab.wavread('/home/cmke/Datasets/_tzanetakis_genre/'+el[2])
+                Mag, Phs = compute_fft(x)
+                Mag = Mag[:,:513]
+                Phs = Phs[:,:513]
+
+            X_adv, P_adv = find_adversary(
+                model=dnn_model, 
                 X0=Mag, 
                 label=target, 
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
-                mu=.05, 
+                mu=.1, 
                 epsilon=epsilon, 
-                maxits=50, 
+                maxits=100, 
                 stop_thresh=0.9, 
                 griffin_lim=True)
             
-            # if not griffin_lim:
-            #     X_adv_valid, _ = griffin_lim_proj(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])), P_adv, its=0)
-
             if save_adversary_audio: 
                 
                 nfft  = 2*(X_adv.shape[1]-1)
@@ -87,155 +92,155 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
         aux_fname.close()
     print ''
 
-def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5, griffin_lim=False):
-    '''
-    Solves:
+# def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5, griffin_lim=False):
+#     '''
+#     Solves:
 
-    y* = argmin_y f(y; label) 
-    s.t. y >= 0 and ||y-X0|| < e
+#     y* = argmin_y f(y; label) 
+#     s.t. y >= 0 and ||y-X0|| < e
 
-    where f(y) is the cost associated the network associates with the pair (y,label)
+#     where f(y) is the cost associated the network associates with the pair (y,label)
 
-    This can be solved using the projected gradient method:
+#     This can be solved using the projected gradient method:
 
-    min_y f(y)
-    s.t. y >= 0 and ||y-X0|| < e
+#     min_y f(y)
+#     s.t. y >= 0 and ||y-X0|| < e
 
-    z = max(0, y^k - mu.f'(y^k))
-    y^k+1 = P(z)
+#     z = max(0, y^k - mu.f'(y^k))
+#     y^k+1 = P(z)
 
-    P(z) = min_u ||u-z|| s.t. {u | ||u-X0|| < e }
-    Lagrangian(u,l) = L(u,l) = ||u-z|| + nu*(||u-X0|| - e)
-    dL/du = u-z + nu*(u-X0) = 0
-    u = (1+nu)^-1 (z + nu*X0)
+#     P(z) = min_u ||u-z|| s.t. {u | ||u-X0|| < e }
+#     Lagrangian(u,l) = L(u,l) = ||u-z|| + nu*(||u-X0|| - e)
+#     dL/du = u-z + nu*(u-X0) = 0
+#     u = (1+nu)^-1 (z + nu*X0)
 
-    KKT:
-    ||u-x|| = e
-    ||(1/(1+nu))(z + nu*x) - x|| = e
-    ||(1/(1+nu))z + ((nu/(1+nu))-1)x|| = e
-    ||(1/(1+nu))z - (1/(1+nu))x|| = e
-    (1/(1+nu))||z-x|| = e
-    nu = max(0,||z-x||/e - 1)
+#     KKT:
+#     ||u-x|| = e
+#     ||(1/(1+nu))(z + nu*x) - x|| = e
+#     ||(1/(1+nu))z + ((nu/(1+nu))-1)x|| = e
+#     ||(1/(1+nu))z - (1/(1+nu))x|| = e
+#     (1/(1+nu))||z-x|| = e
+#     nu = max(0,||z-x||/e - 1)
 
-    function inputs:
+#     function inputs:
 
-    model - pylearn2 dnn model (implements fprop, cost)
-    X0 - an example that the model classifies correctly
-    label - an incorrect label
-    '''
-    # convert integer label into one-hot vector
-    n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
-    one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
-    one_hot[:,label]      = 1
-    nfft = 2*(X0.shape[1]-1)
+#     model - pylearn2 dnn model (implements fprop, cost)
+#     X0 - an example that the model classifies correctly
+#     label - an incorrect label
+#     '''
+#     # convert integer label into one-hot vector
+#     n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
+#     one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
+#     one_hot[:,label]      = 1
+#     nfft = 2*(X0.shape[1]-1)
 
-    # Set-up gradient computation w/ Theano
-    in_batch  = model.get_input_space().make_theano_batch()
-    out_batch = model.get_output_space().make_theano_batch()
-    cost      = model.cost(out_batch, model.fprop(in_batch))
-    dCost     = T.grad(cost, in_batch)
-    grad      = theano.function([in_batch, out_batch], dCost)
-    fprop     = theano.function([in_batch], model.fprop(in_batch))
+#     # Set-up gradient computation w/ Theano
+#     in_batch  = model.get_input_space().make_theano_batch()
+#     out_batch = model.get_output_space().make_theano_batch()
+#     cost      = model.cost(out_batch, model.fprop(in_batch))
+#     dCost     = T.grad(cost, in_batch)
+#     grad      = theano.function([in_batch, out_batch], dCost)
+#     fprop     = theano.function([in_batch], model.fprop(in_batch))
 
-    # projected gradient:
-    last_pred = 0
-    #Y = np.array(np.random.rand(*X0.shape), dtype=np.float32) 
-    Y = np.copy(X0)
-    Y_old = np.copy(Y)
-    t_old = 1
-    for i in xrange(maxits):        
+#     # projected gradient:
+#     last_pred = 0
+#     #Y = np.array(np.random.rand(*X0.shape), dtype=np.float32) 
+#     Y = np.copy(X0)
+#     Y_old = np.copy(Y)
+#     t_old = 1
+#     for i in xrange(maxits):        
 
-        # gradient step
-        Z = Y - mu * n_examples * grad(Y, one_hot)
+#         # gradient step
+#         Z = Y - mu * n_examples * grad(Y, one_hot)
 
-        # non-negative projection
-        Z = Z * (Z>0)
+#         # non-negative projection
+#         Z = Z * (Z>0)
 
-        if griffin_lim:
-            Z, P0 = griffin_lim_proj(np.hstack((Z, Z[:,-2:-nfft//2-1:-1])), P0, its=0)
+#         if griffin_lim:
+#             Z, P0 = griffin_lim_proj(np.hstack((Z, Z[:,-2:-nfft//2-1:-1])), P0, its=0)
         
-        # maximum allowable signal-to-noise projection
-        nu = np.linalg.norm((Z-X0))/n_examples/epsilon - 1 # lagrange multiplier
-        nu = nu * (nu>=0)
-        Y  = (Z + nu*X0) / (1+nu)
+#         # maximum allowable signal-to-noise projection
+#         nu = np.linalg.norm((Z-X0))/n_examples/epsilon - 1 # lagrange multiplier
+#         nu = nu * (nu>=0)
+#         Y  = (Z + nu*X0) / (1+nu)
         
-        # FISTA momentum
-        t = .5 + np.sqrt(1+4*t_old**2)/2.
-        alpha = (t_old - 1)/t
-        Y += alpha * (Y - Y_old)
-        Y_old = np.copy(Y)
-        t_old = t
+#         # FISTA momentum
+#         t = .5 + np.sqrt(1+4*t_old**2)/2.
+#         alpha = (t_old - 1)/t
+#         Y += alpha * (Y - Y_old)
+#         Y_old = np.copy(Y)
+#         t_old = t
 
-        # stopping condition
-        pred = np.sum(fprop(Y), axis=0)
-        pred /= np.sum(pred)
+#         # stopping condition
+#         pred = np.sum(fprop(Y), axis=0)
+#         pred /= np.sum(pred)
 
-        #print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
-        print 'iteration: {}, pred[label]: {}, nu: {}, snr: {}'.format(i, pred[label], nu, 20*np.log10(np.linalg.norm(X0)/np.linalg.norm(Y-X0)))
+#         #print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
+#         print 'iteration: {}, pred[label]: {}, nu: {}, snr: {}'.format(i, pred[label], nu, 20*np.log10(np.linalg.norm(X0)/np.linalg.norm(Y-X0)))
 
-        if pred[label] > stop_thresh:
-            break
-        elif pred[label] < last_pred + 1e-4:
-            break
-        last_pred = pred[label]
+#         if pred[label] > stop_thresh:
+#             break
+#         elif pred[label] < last_pred + 1e-4:
+#             break
+#         last_pred = pred[label]
 
-    return Y, P0
+#     return Y, P0
 
-winfunc = lambda x: np.hanning(x)
-def compute_fft(x, nfft=1024, nhop=512):
+# winfunc = lambda x: np.hanning(x)
+# def compute_fft(x, nfft=1024, nhop=512):
   
-    window   = winfunc(nfft)
-    nframes  = (len(x)-nfft)//nhop
-    fft_data = np.zeros((nframes, nfft))
+#     window   = winfunc(nfft)
+#     nframes  = (len(x)-nfft)//nhop
+#     fft_data = np.zeros((nframes, nfft))
 
-    for i in xrange(nframes):
-        sup = i*nhop + np.arange(nfft)
-        fft_data[i,:] = x[sup] * window
+#     for i in xrange(nframes):
+#         sup = i*nhop + np.arange(nfft)
+#         fft_data[i,:] = x[sup] * window
     
-    fft_data = np.fft.fft(fft_data)
-    return tuple((np.array(np.abs(fft_data), dtype=np.float32), np.array(np.angle(fft_data), dtype=np.float32)))
+#     fft_data = np.fft.fft(fft_data)
+#     return tuple((np.array(np.abs(fft_data), dtype=np.float32), np.array(np.angle(fft_data), dtype=np.float32)))
 
-def overlap_add(X, nfft=1024, nhop=512):
+# def overlap_add(X, nfft=1024, nhop=512):
 
-    window = winfunc(nfft) # must use same window as compute_fft
-    x = np.zeros( X.shape[0]*(nhop+1) )
-    win_sum = np.zeros( X.shape[0]*(nhop+1) )
+#     window = winfunc(nfft) # must use same window as compute_fft
+#     x = np.zeros( X.shape[0]*(nhop+1) )
+#     win_sum = np.zeros( X.shape[0]*(nhop+1) )
 
-    for i, frame in enumerate(X):
-        sup = i*nhop + np.arange(nfft)
-        x[sup] += np.real(np.fft.ifft(frame)) * window
-        win_sum[sup] += window **2 # ensure perfect reconstruction
+#     for i, frame in enumerate(X):
+#         sup = i*nhop + np.arange(nfft)
+#         x[sup] += np.real(np.fft.ifft(frame)) * window
+#         win_sum[sup] += window **2 # ensure perfect reconstruction
     
-    return x/(win_sum + 1e-12)
+#     return x/(win_sum + 1e-12)
 
-def griffin_lim_proj(Mag, Phs=None, its=4, nfft=1024, nhop=512):
-    if Phs is None:
-        Phs = np.pi * np.random.randn(*Mag.shape)
+# def griffin_lim_proj(Mag, Phs=None, its=4, nfft=1024, nhop=512):
+#     if Phs is None:
+#         Phs = np.pi * np.random.randn(*Mag.shape)
 
-    x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
-    for i in xrange(its):
-        _, Phs = compute_fft(x, nfft, nhop)
-        x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
+#     x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
+#     for i in xrange(its):
+#         _, Phs = compute_fft(x, nfft, nhop)
+#         x = overlap_add(Mag * np.exp(1j*Phs), nfft, nhop)
 
-    Mag, Phs = compute_fft(x, nfft, nhop)
-    return np.array(Mag[:,:nfft//2+1], dtype=np.float32), Phs
+#     Mag, Phs = compute_fft(x, nfft, nhop)
+#     return np.array(Mag[:,:nfft//2+1], dtype=np.float32), Phs
 
 
-def aggregate_features(model, X, which_layers=[3], win_size=200, step=100):
-    assert np.max(which_layers) < len(model.layers)
+# def aggregate_features(model, X, which_layers=[3], win_size=200, step=100):
+#     assert np.max(which_layers) < len(model.layers)
 
-    n_classes, n_examples = model.get_output_space().dim, X.shape[0] 
-    in_batch              = model.get_input_space().make_theano_batch()    
-    fprop                 = theano.function([in_batch], model.fprop(in_batch, return_all=True))
-    output_data           = fprop(X)
-    feats                 = np.hstack([output_data[i] for i in which_layers])
+#     n_classes, n_examples = model.get_output_space().dim, X.shape[0] 
+#     in_batch              = model.get_input_space().make_theano_batch()    
+#     fprop                 = theano.function([in_batch], model.fprop(in_batch, return_all=True))
+#     output_data           = fprop(X)
+#     feats                 = np.hstack([output_data[i] for i in which_layers])
 
-    agg_feat = []
-    for i in xrange(0, feats.shape[0]-win_size, step):
-        chunk = feats[i:i+win_size,:]
-        agg_feat.append(np.hstack((np.mean(chunk, axis=0), np.std(chunk, axis=0))))
+#     agg_feat = []
+#     for i in xrange(0, feats.shape[0]-win_size, step):
+#         chunk = feats[i:i+win_size,:]
+#         agg_feat.append(np.hstack((np.mean(chunk, axis=0), np.std(chunk, axis=0))))
         
-    return np.vstack(agg_feat)
+#     return np.vstack(agg_feat)
 
 if __name__ == '__main__':
     '''

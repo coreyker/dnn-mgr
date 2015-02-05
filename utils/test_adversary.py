@@ -49,6 +49,9 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     '''
     # convert integer label into one-hot vector
     n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
+    nfft = 2*(X0.shape[1]-1)
+    nhop = nfft//2
+    
     one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
     one_hot[:,label]      = 1
 
@@ -276,10 +279,6 @@ if __name__ == '__main__':
                 label=out_label2,
                 snr=int(out_snr+.5)))
             audiolab.wavwrite(x_adv, out_file2, fs, fmt)
-
-
-
-
 
     if 0:
         ## Time-domain waveforms
