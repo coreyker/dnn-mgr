@@ -14,7 +14,7 @@ def compute_recall(fname, n_classes=10):
     confusion /= np.sum(confusion, axis=0)
     recalls = np.diag(confusion)
 
-    return np.mean(recalls), np.std(recalls)
+    return np.mean(recalls), np.std(recalls)/np.sqrt(250)*2.145
 
 def get_freq_from_fname(f):
     fname = os.path.splitext(os.path.split(f)[-1])[0]
@@ -67,5 +67,6 @@ if __name__=='__main__':
     plt.xlabel('Lowpass cutoff frequency (Hz)')
     plt.ylabel('Recall')
     plt.axis('tight')
+    plt.axis([20, 11000, 0, 1])
 
-    plt.savefig('recall_vs_cutoff.pdf', format='pdf')
+    #plt.savefig('recall_vs_cutoff.pdf', format='pdf')

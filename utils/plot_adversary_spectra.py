@@ -20,37 +20,46 @@ if __name__=='__main__':
     X_adv = compute_fft(x_adv)[0][:,:513]
 
     rng = 5+np.arange(100)
-    X = X[rng,:]
-    X_adv = X_adv[rng,:]
+    Xt = X[rng,:]
+    X = 20*np.log10(Xt)
+
+    Xt_adv = X_adv[rng,:]
+    X_adv = 20*np.log10(Xt_adv)
+    # nrm = np.max(X)/1.
+    # X /= nrm
+    # X_adv /= nrm
+
+    vmin = np.min(X)
+    vmax = np.max(X)
 
     # Plotting...
     plt.ion()
     plt.figure()
 
     plt.subplot(2,3,1)
-    plt.imshow(20*np.log10(X), extent=[0,11.025,len(rng),0])
+    plt.imshow(X, extent=[0,11.025,len(rng),0], vmin=vmin, vmax=vmax)
     plt.axis('tight')
     plt.xlabel('Frequency (kHz)')
     plt.ylabel('Time frame')
 
     plt.subplot(2,3,2)
-    plt.imshow(20*np.log10(X_adv), extent=[0,11.025,len(rng),0])
+    plt.imshow(X_adv, extent=[0,11.025,len(rng),0], vmin=vmin, vmax=vmax)
     plt.axis('tight')
     plt.xlabel('Frequency (kHz)')
 
     plt.subplot(2,3,3)
-    plt.imshow(20*np.log10(np.abs(X_adv-X)), extent=[0,11.025,len(rng),0])
+    plt.imshow(20*np.log10(np.abs(Xt_adv-Xt)), extent=[0,11.025,len(rng),0], vmin=vmin, vmax=vmax)
     plt.axis('tight')
     plt.xlabel('Frequency (kHz)')
 
     plt.subplot(2,1,2)
     N = 10
     x_range = np.arange(513)/513.*(22.050/2)
-    plt.plot(x_range, 20*np.log10(X[N,:]), color=(.4,.6,1,0.8), linewidth=2)
+    plt.plot(x_range, 20*np.log10(Xt[N,:]), color=(.4,.6,1,0.8), linewidth=2)
     
-    plt.plot(x_range, 20*np.log10(X_adv[N,:]), color=(0,0,0,1), linewidth=1)
+    plt.plot(x_range, 20*np.log10(Xt_adv[N,:]), color=(0,0,0,1), linewidth=1)
     
-    plt.plot(x_range, 20*np.log10(np.abs(X[N,:]-X_adv[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
+    plt.plot(x_range, 20*np.log10(np.abs(Xt[N,:]-Xt_adv[N,:])), '-', color=(1,0.6,0.1,0.6), linewidth=2)
     plt.axis('tight')
     plt.xlabel('Frequency (kHz)')
     plt.ylabel('Magnitude (dB)')
