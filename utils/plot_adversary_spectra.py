@@ -15,11 +15,16 @@ if __name__=='__main__':
     x,_,_ = audiolab.wavread(args.true_file)
     x_adv,_,_ = audiolab.wavread(args.adversary)
     
+    L = min(len(x), len(x_adv))
+    ign = 2048
+    snr = 20*np.log10(np.linalg.norm(x[ign:L-ign-1])/np.linalg.norm(x[ign:L-ign-1]-x_adv[ign:L-ign-1]))
+    print 'SNR: ', snr
+
     # STFT
     X = compute_fft(x)[0][:,:513]
     X_adv = compute_fft(x_adv)[0][:,:513]
 
-    rng = 5+np.arange(100)
+    rng = 1+np.arange(400)
     Xt = X[rng,:]
     X = 20*np.log10(Xt)
 
