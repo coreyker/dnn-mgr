@@ -1,19 +1,21 @@
 !obj:pylearn2.train.Train {
-    dataset : &trainset !obj:GTZAN_dataset2d.GTZAN_dataset2d {
-            which_set : 'train',
-            config : &fold !pkl: "%(fold_config)s"
+    dataset : &trainset !obj:audio_dataset2d.AudioDataset2d {
+        which_set : 'train',
+        config : &fold !pkl: "%(fold_config)s",
+        ncomponents : &ncomps 80,
+        epsilon : &eps 3
     },
     model : !obj:pylearn2.models.mlp.MLP {
         batch_size : 30,
         input_space: !obj:pylearn2.space.Conv2DSpace {
-           shape: [40, 80],#513],
+           shape: [40, *ncomps],
            num_channels: 1
         },
         layers : [
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
-                output_channels : 30,
-                kernel_shape : [10, 80],#513],
+                output_channels : 10,
+                kernel_shape : [10, *ncomps],
                 pool_shape : [3, 1],
                 pool_stride : [3, 1],
                 irange : &irange .1
@@ -35,15 +37,17 @@
         learning_rule : !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum : 0.5
         },
-        train_iteration_mode : 'shuffled_sequential', #'batchwise_shuffled_sequential',
-        monitor_iteration_mode : 'sequential', #'batchwise_shuffled_sequential',
+        train_iteration_mode : 'even_shuffled_sequential', #'batchwise_shuffled_sequential',
+        monitor_iteration_mode : 'even_shuffled_sequential', #'batchwise_shuffled_sequential',
         #batches_per_iter : 500,
         #batch_size : 1200,
         monitoring_dataset : {
             'train' : *trainset,
-            'valid' : !obj:GTZAN_dataset2d.GTZAN_dataset2d {
-                    which_set : 'valid',
-                    config : *fold
+            'valid' : !obj:audio_dataset2d.AudioDataset2d {
+                which_set : 'valid',
+                config : *fold,
+                ncomponents : *ncomps,
+                epsilon : *eps
             }
         },
         termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {

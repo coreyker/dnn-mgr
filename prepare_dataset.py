@@ -239,26 +239,26 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     train_support = []
     for f in train_list:
         offset, nframes, key, target = file_index[f]
-        train_support.append(offset + np.arange(0,nframes,tframes)) 
+        train_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
     train_support = np.hstack(train_support)
     
     valid_support = []
     for f in valid_list:
         offset, nframes, key, target = file_index[f]
-        valid_support.append(offset + np.arange(0,nframes,tframes)) 
+        valid_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
     valid_support = np.hstack(valid_support)
 
     test_support = []
     for f in test_list:
         offset, nframes, key, target = file_index[f]
-        test_support.append(offset + np.arange(0,nframes,tframes))  
+        test_support.append(offset + np.arange(0,nframes-tframes,tframes))  
     test_support = np.hstack(test_support)
 
     # compute mean and std for training set only
+    nsamples = len(train_support)*tframes
     if compute_std:
         sum_x  = np.zeros(nfeats, dtype=np.float32)
-        sum_x2 = np.zeros(nfeats, dtype=np.float32)
-        nsamples = len(train_support)*tframes
+        sum_x2 = np.zeros(nfeats, dtype=np.float32)        
         
         for n,i in enumerate(train_support):
             sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
@@ -279,7 +279,9 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     # compute PCA whitening matrix
     if compute_pca:
         XX = 0
-        for n,i in enumerate(train_support):
+        tmp_support = train_support[::10] # speed-up
+        nsamples = len(tmp_support)*tframes
+        for n,i in enumerate(tmp_support):
             sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
             sys.stdout.flush()
             for j in xrange(tframes):                       

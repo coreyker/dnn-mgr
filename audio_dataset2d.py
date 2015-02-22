@@ -3,9 +3,9 @@ import functools
 import tables
 
 from pylearn2.datasets.dataset import Dataset
-from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables
+from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables, DefaultViewConverter
 from pylearn2.blocks import Block
-from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
+from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, VectorSequenceSpace, IndexSpace
 from pylearn2.utils.iteration import SubsetIterator, FiniteDatasetIterator, resolve_iterator_class
 from pylearn2.utils import safe_zip, safe_izip
 
@@ -13,15 +13,22 @@ from pylearn2.datasets import control
 from pylearn2.utils.exc import reraise_as
 from pylearn2.utils.rng import make_np_rng
 from pylearn2.utils import contains_nan
-from pylearn2.models.mlp import MLP, Linear, PretrainedLayer
+from pylearn2.models.mlp import MLP, Linear, PretrainedLayer, CompositeLayer
 from pylearn2.models.autoencoder import Autoencoder
 
+from pylearn2.blocks import Block, StackedBlocks
+from pylearn2.utils import as_floatX, safe_update, sharedX
+from pylearn2.models import Model
+from pylearn2.linear.matrixmul import MatrixMul
+
 from theano import config
+import theano
+import theano.tensor as T
 
 import pdb
 
-class AudioDataset(DenseDesignMatrixPyTables):
-    def __init__(self, config, which_set='train'): #, standardize=True, pca_whitening=False, ncomponents=None, epsilon=3):
+class AudioDataset2d(DenseDesignMatrixPyTables):
+    def __init__(self, config, which_set='train', ncomponents=80, epsilon=3):
 
         keys = ['train', 'test', 'valid']
         assert which_set in keys
@@ -42,38 +49,21 @@ class AudioDataset(DenseDesignMatrixPyTables):
         self.mean      = config['mean']
         self.var       = config['var']
         self.tframes   = config['tframes']
+                
+        # PCA xform
+        S        = config['S'][:ncomponents]   # eigenvalues
+        U        = config['U'][:,:ncomponents] # eigenvectors            
+        self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)
 
-        # if (standardize is True) and (pca_whitening is True):
-        #     raise ValueError("'standardize' and 'pca_whiten' cannot both be True")
+        X = T.dmatrix('X')
+        Z = T.transpose(T.dot(self.pca, T.transpose(X-self.mean)))
+        self.transform = theano.function([X], Z)
         
-        # if ncomponents is None:
-        #     self.ncomponents = len(self.mean)
-        # else:
-        #     assert ncomponents <= len(self.mean)
-        #     self.ncomponents = ncomponents
+        view_converter = DefaultViewConverter((self.tframes, ncomponents, 1))
 
-        # if (pca_whitening is True):
-        #     S = config['S'][:self.ncomponents]   # eigenvalues
-        #     U = config['U'][:,:self.ncomponents] # eigenvectors            
-        #     self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T) 
-
-        # # create linear layer to take care of pre-processing (e.g., standardization or whitening)
-        # pre_layer = Linear(dim=self.ncomponents, layer_name='pre', irange=0, W_lr_scale=0, b_lr_scale=0)
-        # m = MLP(nvis=self.nfft//2+1, layers=[preproc_layer]) # define input layer
-
-        # if standardize is True:
-        #     pre_layer.set_biases(np.array(-self.mean/self.var, dtype=np.float32))
-        #     pre_layer.set_weights(np.diag(np.reciprocal(self.var), dtype=np.float32))
-        #     # self.transform = lambda X: (X-self.mean)/self.var
-        # elif pca_whitening is True:
-        #     pre_layer.set_biases(np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32))
-        #     pre_layer.set_weights(np.array(self.pca.transpose(), dtype=np.float32))
-        #     #self.transform = lambda X: (X-self.mean).dot(self.pca.transpose())
-        # else:
-        #     pass
-        #     #self.transform = lambda X: X
-
-        super(AudioDataset, self).__init__(X=data.X, y=data.y)
+        super(AudioDataset2d, self).__init__(X=data.X, 
+            y=data.y,
+            view_converter=view_converter)
     
     def __del__(self):
         self.hdf5.close()   
@@ -136,19 +126,19 @@ class AudioDataset(DenseDesignMatrixPyTables):
         if 'songlevel-features' in sub_sources:
             if batch_size is not 1:
                 raise ValueError("'batch_size' must be set to 1 for songlevel iterator")
-            return SonglevelIterator(self,
+            return SonglevelIterator2d(self,
                               mode(len(self.file_list), batch_size, num_batches, rng),
                               data_specs=data_specs,
                               return_tuple=return_tuple,
                               convert=convert)
         else:
-            return FramelevelIterator(self,
+            return FramelevelIterator2d(self,
                                   mode(len(self.support), batch_size, num_batches, rng),
                                   data_specs=data_specs,
                                   return_tuple=return_tuple,
                                   convert=convert)
 
-class FramelevelIterator(FiniteDatasetIterator):
+class FramelevelIterator2d(FiniteDatasetIterator):
     '''
     Returns individual (spectrogram) frames/slices from the dataset
     '''
@@ -187,6 +177,8 @@ class FramelevelIterator(FiniteDatasetIterator):
                 design_mat = []
                 for index in next_index:                    
                     X = np.abs(data[index:index+self._dataset.tframes, :])
+                    X = self._dataset.transform(X) # !!! PCA !!!
+
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
 
@@ -200,7 +192,7 @@ class FramelevelIterator(FiniteDatasetIterator):
             rval, = rval
         return rval
 
-class SonglevelIterator(FiniteDatasetIterator):
+class SonglevelIterator2d(FiniteDatasetIterator):
     '''
     Returns all data associated with a particular song from the dataset
     (only iterates 1 song at a time!)
@@ -233,8 +225,10 @@ class SonglevelIterator(FiniteDatasetIterator):
                 for index in next_index:
                     if space.dtype=='complex64':
                         X = data[index:index+self._dataset.tframes, :] # return phase too
+                        # PCA?
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])
+                        X = self._dataset.transform(X) # !!! PCA !!!
 
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
@@ -251,9 +245,6 @@ class SonglevelIterator(FiniteDatasetIterator):
         return rval
 
 class PreprocLayer(PretrainedLayer):
-    # should this use a linear layer instead of an autoencoder
-    # (problem is layers don't implement upward_pass as required by pretrained layer...
-    # but perhaps could write upward_pass function to call layer's fprop.)
     def __init__(self, config, proc_type='standardize', **kwargs):
         '''
         config: dictionary with partition configuration information
@@ -280,23 +271,32 @@ class PreprocLayer(PretrainedLayer):
             dim      = nvis
             self.biases   = np.array(-self.mean * self.istd, dtype=np.float32)
             self.weights  = np.array(np.diag(self.istd), dtype=np.float32)
+        
+            # Autoencoder with linear units
+            pre_layer = Autoencoder(nvis=nvis, nhid=dim, act_enc=None, act_dec=None, irange=0)
             
         if proc_type == 'pca_whiten':
             raise NotImplementedError(
             '''PCA whitening not yet implemented as a layer. 
             Use audio_dataset2d.AudioDataset2d to perform whitening from the dataset iterator''')
 
-            # dim      = kwargs['ncomponents']
-            # S        = config['S'][:dim]   # eigenvalues
-            # U        = config['U'][:,:dim] # eigenvectors            
-            # self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T)
-            
-            # self.biases   = np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32)
-            # self.weights  = np.array(self.pca.transpose(), dtype=np.float32)
+            # - how to apply the same transform to each row of the input?
+            # - setting nvis=nvis*tframes,  nhid=dim*tframes leads to out of memory error (and is wasteful because we don't need independent weights)
+            # - seems a conv. autoencoder might work..., but this is not implemented in pylearn2...
+            # - conv rbm may be possible, but this passes the output through a sigmoid (and we want a linear transform)
+            # - could move the whitening to the dataset iterator (as before), but then the model can't be applied to new data without first somehow
+            # accessing the whitening paramters, and preprocessing with them...
+            # - A composite layer might work, but seems problematic right now...
+            # - or use a ConvElemwise layer with weights set and then frozen... tried this in yaml file, but it is not cooperating...
 
-        # Autoencoder with linear units
-        pre_layer = Autoencoder(nvis=nvis, nhid=dim, act_enc=None, act_dec=None, irange=0)
-        
+            # Maybe the simplest thing to do would be to make an Autoencoder(Block, Model)-like class
+            # that implements an upward_pass, and can be made to apply the transform to the individual rows? 
+            # mlp.PreTrained layer just has to work, so whatever is minimally required there should be fine?
+
+            # in_space  = Conv2DSpace(shape=(self.tframes, nvis), num_channels=1, axes=('b', 0, 1, 'c'))
+            # out_space = Conv2DSpace(shape=(self.tframes, dim),  num_channels=1, axes=('b', 0, 1, 'c'))
+            # pre_layer = PCAWhitener(in_space, out_space, self.weights)
+
         # Set weights for pre-processing
         params    = pre_layer.get_param_values()
         params[1] = self.biases
@@ -314,17 +314,58 @@ class PreprocLayer(PretrainedLayer):
     def get_param_values(self):
         return list((self.get_weights(), self.get_biases()))
 
+# class PCAWhitener(Block, Model):
+#     def __init__(self, vis_space, hid_space, weights):#, W, b):
+#         Model.__init__(self)
+#         Block.__init__(self)
+
+#         self.vis_space = vis_space
+#         self.hid_space = hid_space
+#         #self.b = b
+#         self.transformer = MatrixMul(  sharedX(
+#                 weights,
+#                 name='W',
+#                 borrow=True
+#             )
+#         )
+
+#     def get_input_space(self):
+#         return self.vis_space
+
+#     def get_output_space(self):
+#         return self.hid_space
+
+#     def upward_pass(self, x):
+#         #pdb.set_trace()
+#         if isinstance(x, tensor.Variable):
+#            return self.transformer.lmul_T(x)
+#         else:
+#            return [self.upward_pass(i) for i in x]        
+
+# class PCALayer(CompositeLayer):
+#     def __init__(self, config, n_components):
+        
+#         # load parition information
+#         self.mean    = config['mean']
+#         self.istd    = np.reciprocal(np.sqrt(config['var']))
+#         self.tframes = config['tframes']
+#         nvis = len(self.mean)
+
+#         layer = Linear(dim=n_components, layer_name='pca', irange=0)
+#         return super(PCALayer, self).__init__(layer_name='pre', layers=[layer for t in xrange(self.tframes)])
+
+
 if __name__=='__main__':
 
     # tests
     import theano
     import cPickle
-    from audio_dataset import AudioDataset
+    from audio_dataset import AudioDataset2d
 
     with open('GTZAN_stratified.pkl') as f: 
         config = cPickle.load(f)
     
-    D = AudioDataset(config)
+    D = AudioDataset2d(config)
     
     feat_space   = VectorSpace(dim=D.X.shape[1])
     feat_space_complex = VectorSpace(dim=D.X.shape[1], dtype='complex64')

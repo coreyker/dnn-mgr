@@ -1,27 +1,29 @@
 # training script
-import sys, os, cPickle
+import sys, os, argparse, cPickle
 import pylearn2.config.yaml_parse as yaml_parse
 import pdb
 
 if __name__=="__main__":
 	
-	fold_config = sys.argv[1] # e.g., GTZAN_1024-fold-1_of_4.pkl
-	yaml_base_file = sys.argv[2] # e.g., mlp_rlu.yaml
+	parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
+	description='''Script to train a DNN with a variable number of units and the possibility of using dropout.
+	''')
 
-	with open(fold_config) as f:
-		cfg = cPickle.load(f)
+	parser.add_argument('fold_config', help='Path to dataset partition configuration file (generated with prepare_dataset.py)')
+	parser.add_argument('yaml_file')
+	parser.add_argument('--output', help='Name of output model')
+	args = parser.parse_args()
 
-	base  = cfg['h5_file_name'].split('.h5')[0]
-	ext   = fold_config.split(base)[1]
-	model = yaml_base_file.split('.yaml')[0] + ext
+	if args.output is None:
+		parser.error('Please specify the name that the trained model file should be saved as (.pkl file)')
 
-	hyper_params = {
-		'fold_config' : fold_config,
-		'best_model_save_path' : './saved/' + model,
-		'save_path'	: './saved/save.pkl'
+	hyper_params = { 
+		'fold_config' : args.fold_config,
+		'best_model_save_path' : args.output,
+		'save_path'	: '/tmp/save.pkl'
 	}
 
-	with open(yaml_base_file) as f:
+	with open(args.yaml_file) as f:
 		train_yaml = f.read()
 
 	train_yaml = train_yaml % (hyper_params)
