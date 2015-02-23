@@ -15,17 +15,17 @@
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
                 output_channels : 100,
-                kernel_shape : [10, 10],#*ncomps],
-                pool_shape : [2, 2],
-                pool_stride : [2, 2],
+                kernel_shape : [2, *ncomps],
+                pool_shape : [2, 1],
+                pool_stride : [2, 1],
                 irange : &irange .1
                 },
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h1',
                 output_channels : 100,
-                kernel_shape : [6, 6],
-                pool_shape : [2, 2],
-                pool_stride : [2, 2],
+                kernel_shape : [4, 1],
+                pool_shape : [2, 1],
+                pool_stride : [2, 1],
                 irange : *irange 
                 },
             !obj:pylearn2.models.mlp.RectifiedLinear {
@@ -58,11 +58,19 @@
                 epsilon : *eps
             }
         },
-        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
-            channel_name : 'valid_y_misclass',
-            prop_decrease : .001,
-            N: 5
-        }#,cost : !obj:pylearn2.costs.mlp.Default {}
+        termination_criterion: !obj:pylearn2.termination_criteria.And {
+            criteria: [
+                !obj:pylearn2.termination_criteria.MonitorBased {
+                    channel_name: "valid_y_nll",
+                    prop_decrease: 0.001,
+                    N: 10
+                },
+                !obj:pylearn2.termination_criteria.EpochCounter {
+                    max_epochs: 30
+                }
+            ]
+        },
+
     },
     extensions: [
         !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {

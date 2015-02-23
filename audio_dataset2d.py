@@ -98,7 +98,7 @@ class AudioDataset2d(DenseDesignMatrixPyTables):
 
         convert = []
         for sp, src in safe_zip(sub_spaces, sub_sources):
-            if src == 'features' and \
+            if (src == 'features' or src == 'songlevel-features') and \
                getattr(self, 'view_converter', None) is not None:
                 conv_fn = (lambda batch, self=self, space=sp:
                            self.view_converter.get_formatted_batch(batch,
@@ -208,7 +208,7 @@ class SonglevelIterator2d(FiniteDatasetIterator):
         
         # lookup file's position in the hdf5 array
         offset, nframes, key, target = self._dataset.file_index[next_file]
-        next_index = offset + np.arange(nframes)
+        next_index = offset + np.arange(0,nframes-self._dataset.tframes,self._dataset.tframes)
 
         spaces, sources = self._data_specs
         output = []                
@@ -225,7 +225,7 @@ class SonglevelIterator2d(FiniteDatasetIterator):
                 for index in next_index:
                     if space.dtype=='complex64':
                         X = data[index:index+self._dataset.tframes, :] # return phase too
-                        # PCA?
+                        X = self._dataset.transform(np.abs(X)) # !!! PCA ???!!!
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])
                         X = self._dataset.transform(X) # !!! PCA !!!
