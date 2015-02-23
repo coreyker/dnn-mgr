@@ -27,7 +27,8 @@ def read_mp3(fn) :
     buf=mf.read()
     while buf :
         shortbuf = N.fromstring(buf,'int16')
-        dat[st:st+len(shortbuf)]=shortbuf
+        if st+len(shortbuf)<len(dat):
+            dat[st:st+len(shortbuf)]=shortbuf
         st += len(shortbuf)
         buf=mf.read()
     dat=dat[:st]
