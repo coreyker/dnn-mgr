@@ -14,14 +14,22 @@
         layers : [
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
-                output_channels : 10,
-                kernel_shape : [10, *ncomps],
-                pool_shape : [3, 1],
-                pool_stride : [3, 1],
+                output_channels : 100,
+                kernel_shape : [10, 10],#*ncomps],
+                pool_shape : [2, 2],
+                pool_stride : [2, 2],
                 irange : &irange .1
                 },
-            !obj:pylearn2.models.mlp.RectifiedLinear {
+            !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h1',
+                output_channels : 100,
+                kernel_shape : [6, 6],
+                pool_shape : [2, 2],
+                pool_stride : [2, 2],
+                irange : *irange 
+                },
+            !obj:pylearn2.models.mlp.RectifiedLinear {
+                layer_name : 'h2',
                 dim : 50,
                 irange : *irange
                 },
@@ -33,7 +41,7 @@
             ]
     },
     algorithm : !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : .01,
+        learning_rate : .005,
         learning_rule : !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum : 0.5
         },
@@ -63,12 +71,12 @@
         },
         !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,
-            saturate: 50,
+            saturate: 100,
             final_momentum: .9
         },
         !obj:pylearn2.training_algorithms.sgd.LinearDecayOverEpoch {
             start: 1,
-            saturate: 50,
+            saturate: 100,
             decay_factor: .01
         },
     ],

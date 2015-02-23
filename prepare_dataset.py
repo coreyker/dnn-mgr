@@ -4,7 +4,8 @@ import numpy as np
 import tables
 import theano
 import cPickle
-from scikits import audiolab
+from scikits import audiolab, samplerate
+from utils.read_mp3 import read_mp3
 
 import pdb
 
@@ -30,7 +31,7 @@ def collect_audio(root_directory, label_list):
 
     for root, dirs, files in os.walk(root_directory):
         for filename in files:
-            if filename.endswith(('.wav', '.au')):
+            if filename.endswith(('.wav', '.au', '.mp3')):
                 # audio file found, check for label
                 labelled = False
                 dir_label = os.path.split(root)[-1].lower()
@@ -62,7 +63,7 @@ def collect_audio(root_directory, label_list):
 
     return file_dict
 
-def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=512):
+def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=512, fs=22050, seglen=30):
 
     if os.path.exists(hdf5_save_name):
         warnings.warn('hdf5 file {} already exists, new file will not be created'.format(hdf5_save_name))
@@ -94,8 +95,22 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
                 read_fun = audiolab.wavread             
             elif f.endswith('.au'):
                 read_fun = audiolab.auread
+            elif f.endswith('.mp3'):
+                read_fun = read_mp3
             
-            audio_data, fs, _ = read_fun(os.path.join(root_directory, f))
+            # read audio
+            audio_data, fstmp, _ = read_fun(os.path.join(root_directory, f))
+            
+            # make mono
+            if len(audio_data.shape) != 1: 
+                audio_data = np.sum(audio_data, axis=1)/2.
+            
+            # work with only first seglen seconds
+            audio_data = audio_data[:fstmp*seglen] 
+
+            # resample audio data
+            if fstmp != fs:
+                audio_data = samplerate.resample(audio_data, fs/float(fstmp), 'sinc_best')
             
             # compute dft
             nframes  = (len(audio_data)-nfft)//nhop
