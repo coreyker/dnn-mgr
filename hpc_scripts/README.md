@@ -84,7 +84,11 @@ scikits.audiolab,
 scikits.samplerate, 
 pymad (if you need to read mp3's) 
 ```
-You might try installing these first with "pip install package_name", and if that fails, download the source code and run "python setup.py install". 
+You might first try installing these using the "requirements.txt" file in this folder:
+```
+pip install -r path/to/requirements.txt
+```
+If that doesn't work you can try installing these with "pip install package_name", and if that fails, download the source code for each module and run "python setup.py install". 
 
 ### Theano setup
 If you want theano to use your GPU (and you probably do if you have one), create a file called .theanorc in your home directory with the following lines:

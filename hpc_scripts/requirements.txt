@@ -1,0 +1,22 @@
+Cython==0.21.1
+PyYAML==3.11
+Theano==0.6.0
+argparse==1.2.1
+ipython==2.3.0
+matplotlib==1.4.2
+mock==1.0.1
+nose==1.3.4
+numexpr==2.4
+numpy==1.9.0
+-e git://github.com/lisa-lab/pylearn2.git@b645ac32a6ca0ce92724e75236db193671ce2e19#egg=pylearn2-master
+pymad==0.6
+pyparsing==2.0.3
+python-dateutil==2.2
+pytz==2014.7
+scikit-learn==0.15.2
+scikits.audiolab==0.11.0
+scikits.samplerate==0.4.0.dev
+scipy==0.14.0
+six==1.8.0
+tables==3.1.2dev
+wsgiref==0.1.2
