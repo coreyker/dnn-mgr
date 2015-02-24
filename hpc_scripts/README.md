@@ -1,10 +1,10 @@
 ##Setup Tips!
-If you want to run this code on a high performance cluster (HPC), or on a computer where you don't have root access, the following setup instructions may be helpful. They may also be helpful in other cases as well
+If you want to run this code on a high performance cluster (HPC), or on a computer where you don't have root access, the following setup instructions may be helpful. They may also be helpful in other cases as well.
 
 ## Instructions
 
 ### HPC Module loading
-On the HPC I use there are various modules that must be loaded on demand (e.g., python and cuda). This is done by placing a the file .gbarrc in your home directory with the following line:
+On the HPC I use there are various modules that must be loaded on demand (e.g., python and cuda). This is done by placing a file called .gbarrc in your home directory with the following lines:
 ```
 MODULES=python/2.7.3,cuda/6.5
 ```
@@ -17,7 +17,7 @@ mkdir .local
 mkdir .local/lib
 mkdir .local/include
 ```
-Now download and install the libraries into those folders. The following "pseudocode" demonstrates:
+Now download and install the libraries into those folders. The following "pseudocode" demonstrates (you will need to track down the correct urls for your platform):
 ```
 url_list = [
 "http://www.hdfgroup.org/HDF5/release/obtain5.html", # find your libhdf5 here
@@ -69,7 +69,7 @@ include_dirs = $HOME/.local/include
 ```
 This tells numpy's distutils where to find your locally installed libraries.
 
-Now we can install the numpy packages (using pip, or from github sources, etc). The packages I have installed are:
+Now we can install the python packages (using pip, or from github sources, etc). The packages I have installed are:
 ```
 numpy, 
 scipy, 
