@@ -14,16 +14,16 @@
         layers : [
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
-                output_channels : 100,
-                kernel_shape : [2, *ncomps],
+                output_channels : 50,
+                kernel_shape : [10, *ncomps],
                 pool_shape : [2, 1],
                 pool_stride : [2, 1],
                 irange : &irange .1
                 },
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h1',
-                output_channels : 100,
-                kernel_shape : [4, 1],
+                output_channels : 50,
+                kernel_shape : [6, 1],
                 pool_shape : [2, 1],
                 pool_stride : [2, 1],
                 irange : *irange 

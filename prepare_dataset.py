@@ -254,19 +254,22 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     train_support = []
     for f in train_list:
         offset, nframes, key, target = file_index[f]
-        train_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
+        sup = np.arange(0,nframes-tframes,int(tframes/2.+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        train_support.append(offset + sup) 
     train_support = np.hstack(train_support)
     
     valid_support = []
     for f in valid_list:
         offset, nframes, key, target = file_index[f]
-        valid_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
+        sup = np.arange(0,nframes-tframes,int(tframes/2.+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        valid_support.append(offset + sup) 
     valid_support = np.hstack(valid_support)
 
     test_support = []
     for f in test_list:
         offset, nframes, key, target = file_index[f]
-        test_support.append(offset + np.arange(0,nframes-tframes,tframes))  
+        sup = np.arange(0,nframes-tframes,int(tframes/2.+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        test_support.append(offset + sup)  
     test_support = np.hstack(test_support)
 
     # compute mean and std for training set only
@@ -294,7 +297,7 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     # compute PCA whitening matrix
     if compute_pca:
         XX = 0
-        tmp_support = train_support[::10] # speed-up
+        tmp_support = train_support[::3] # speed-up
         nsamples = len(tmp_support)*tframes
         for n,i in enumerate(tmp_support):
             sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
