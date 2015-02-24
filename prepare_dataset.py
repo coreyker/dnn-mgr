@@ -4,7 +4,8 @@ import numpy as np
 import tables
 import theano
 import cPickle
-from scikits import audiolab
+from scikits import audiolab, samplerate
+from utils.read_mp3 import read_mp3
 
 import pdb
 
@@ -30,7 +31,7 @@ def collect_audio(root_directory, label_list):
 
     for root, dirs, files in os.walk(root_directory):
         for filename in files:
-            if filename.endswith(('.wav', '.au')):
+            if filename.endswith(('.wav', '.au', '.mp3')):
                 # audio file found, check for label
                 labelled = False
                 dir_label = os.path.split(root)[-1].lower()
@@ -62,7 +63,7 @@ def collect_audio(root_directory, label_list):
 
     return file_dict
 
-def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=512):
+def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=512, fs=22050, seglen=30):
 
     if os.path.exists(hdf5_save_name):
         warnings.warn('hdf5 file {} already exists, new file will not be created'.format(hdf5_save_name))
@@ -94,8 +95,22 @@ def make_hdf5(hdf5_save_name, label_list, root_directory='.', nfft=1024, nhop=51
                 read_fun = audiolab.wavread             
             elif f.endswith('.au'):
                 read_fun = audiolab.auread
+            elif f.endswith('.mp3'):
+                read_fun = read_mp3
             
-            audio_data, fs, _ = read_fun(os.path.join(root_directory, f))
+            # read audio
+            audio_data, fstmp, _ = read_fun(os.path.join(root_directory, f))
+            
+            # make mono
+            if len(audio_data.shape) != 1: 
+                audio_data = np.sum(audio_data, axis=1)/2.
+            
+            # work with only first seglen seconds
+            audio_data = audio_data[:fstmp*seglen] 
+
+            # resample audio data
+            if fstmp != fs:
+                audio_data = samplerate.resample(audio_data, fs/float(fstmp), 'sinc_best')
             
             # compute dft
             nframes  = (len(audio_data)-nfft)//nhop
@@ -239,26 +254,26 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     train_support = []
     for f in train_list:
         offset, nframes, key, target = file_index[f]
-        train_support.append(offset + np.arange(0,nframes,tframes)) 
+        train_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
     train_support = np.hstack(train_support)
     
     valid_support = []
     for f in valid_list:
         offset, nframes, key, target = file_index[f]
-        valid_support.append(offset + np.arange(0,nframes,tframes)) 
+        valid_support.append(offset + np.arange(0,nframes-tframes,tframes)) 
     valid_support = np.hstack(valid_support)
 
     test_support = []
     for f in test_list:
         offset, nframes, key, target = file_index[f]
-        test_support.append(offset + np.arange(0,nframes,tframes))  
+        test_support.append(offset + np.arange(0,nframes-tframes,tframes))  
     test_support = np.hstack(test_support)
 
     # compute mean and std for training set only
+    nsamples = len(train_support)*tframes
     if compute_std:
         sum_x  = np.zeros(nfeats, dtype=np.float32)
-        sum_x2 = np.zeros(nfeats, dtype=np.float32)
-        nsamples = len(train_support)*tframes
+        sum_x2 = np.zeros(nfeats, dtype=np.float32)        
         
         for n,i in enumerate(train_support):
             sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
@@ -279,7 +294,9 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     # compute PCA whitening matrix
     if compute_pca:
         XX = 0
-        for n,i in enumerate(train_support):
+        tmp_support = train_support[::10] # speed-up
+        nsamples = len(tmp_support)*tframes
+        for n,i in enumerate(tmp_support):
             sys.stdout.write('\rComputing PCA matrix: %2.2f%%' % (n*tframes/float(nsamples)*100))
             sys.stdout.flush()
             for j in xrange(tframes):                       

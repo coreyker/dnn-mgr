@@ -1,25 +1,35 @@
 !obj:pylearn2.train.Train {
-    dataset : &trainset !obj:GTZAN_dataset2d.GTZAN_dataset2d {
-            which_set : 'train',
-            config : &fold !pkl: "%(fold_config)s"
+    dataset : &trainset !obj:audio_dataset2d.AudioDataset2d {
+        which_set : 'train',
+        config : &fold !pkl: "%(fold_config)s",
+        ncomponents : &ncomps 80,
+        epsilon : &eps 3
     },
     model : !obj:pylearn2.models.mlp.MLP {
         batch_size : 30,
         input_space: !obj:pylearn2.space.Conv2DSpace {
-           shape: [40, 80],#513],
+           shape: [40, *ncomps],
            num_channels: 1
         },
         layers : [
             !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h0',
-                output_channels : 30,
-                kernel_shape : [10, 80],#513],
-                pool_shape : [3, 1],
-                pool_stride : [3, 1],
+                output_channels : 100,
+                kernel_shape : [2, *ncomps],
+                pool_shape : [2, 1],
+                pool_stride : [2, 1],
                 irange : &irange .1
                 },
-            !obj:pylearn2.models.mlp.RectifiedLinear {
+            !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                 layer_name : 'h1',
+                output_channels : 100,
+                kernel_shape : [4, 1],
+                pool_shape : [2, 1],
+                pool_stride : [2, 1],
+                irange : *irange 
+                },
+            !obj:pylearn2.models.mlp.RectifiedLinear {
+                layer_name : 'h2',
                 dim : 50,
                 irange : *irange
                 },
@@ -31,26 +41,36 @@
             ]
     },
     algorithm : !obj:pylearn2.training_algorithms.sgd.SGD {
-        learning_rate : .01,
+        learning_rate : .005,
         learning_rule : !obj:pylearn2.training_algorithms.learning_rule.Momentum {
             init_momentum : 0.5
         },
-        train_iteration_mode : 'shuffled_sequential', #'batchwise_shuffled_sequential',
-        monitor_iteration_mode : 'sequential', #'batchwise_shuffled_sequential',
+        train_iteration_mode : 'even_shuffled_sequential', #'batchwise_shuffled_sequential',
+        monitor_iteration_mode : 'even_shuffled_sequential', #'batchwise_shuffled_sequential',
         #batches_per_iter : 500,
         #batch_size : 1200,
         monitoring_dataset : {
             'train' : *trainset,
-            'valid' : !obj:GTZAN_dataset2d.GTZAN_dataset2d {
-                    which_set : 'valid',
-                    config : *fold
+            'valid' : !obj:audio_dataset2d.AudioDataset2d {
+                which_set : 'valid',
+                config : *fold,
+                ncomponents : *ncomps,
+                epsilon : *eps
             }
         },
-        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
-            channel_name : 'valid_y_misclass',
-            prop_decrease : .001,
-            N: 5
-        }#,cost : !obj:pylearn2.costs.mlp.Default {}
+        termination_criterion: !obj:pylearn2.termination_criteria.And {
+            criteria: [
+                !obj:pylearn2.termination_criteria.MonitorBased {
+                    channel_name: "valid_y_nll",
+                    prop_decrease: 0.001,
+                    N: 10
+                },
+                !obj:pylearn2.termination_criteria.EpochCounter {
+                    max_epochs: 30
+                }
+            ]
+        },
+
     },
     extensions: [
         !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
@@ -59,12 +79,12 @@
         },
         !obj:pylearn2.training_algorithms.learning_rule.MomentumAdjustor {
             start: 1,
-            saturate: 50,
+            saturate: 100,
             final_momentum: .9
         },
         !obj:pylearn2.training_algorithms.sgd.LinearDecayOverEpoch {
             start: 1,
-            saturate: 50,
+            saturate: 100,
             decay_factor: .01
         },
     ],
