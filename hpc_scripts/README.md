@@ -42,9 +42,7 @@ the --prefix flag tells the Makefile to install the library locally. The hdf5 li
 I setup a python virtual environment as follows
 
 ```
-pip install virtualenv
 mkdir venv
-cd venv
 virtualenv venv
 ```
 
@@ -97,4 +95,10 @@ device = gpu0
 
 [nvcc]
 fastmath = True
+```
+
+### Library paths
+You may need to add the local library paths to your .bashrc file, by adding the following line:
+```
+export LD_LIBRARY_PATH=~/.local/lib:$LD_LIBRARY_PATH
 ```
