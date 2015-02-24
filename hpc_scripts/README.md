@@ -65,7 +65,7 @@ include_dirs = $HOME/.local/include
 library_dirs = $HOME/.local/lib
 include_dirs = $HOME/.local/include
 ```
-This tells numpy's distutils where to find your locally installed libraries.
+This tells numpy's distutils where to find your locally installed libraries. You will probably have to replace $HOME with the actual path to your home directory (e.g., "/home/a/user") since it does not seem to get properly exported as an environment variable by numpy.
 
 Now we can install the python packages (using pip, or from github sources, etc). The packages I have installed are:
 ```
