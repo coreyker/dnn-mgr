@@ -35,7 +35,7 @@ for url in url_list:
 	make
 	make install
 ```
-the --prefix flag tells the Makefile to install the library locally. The hdf5 library might need additional configuration information (e.g., in order to allow multiple read access, which is required).
+the --prefix flag tells the Makefile to install the library locally. The hdf5 library might need additional configuration information (e.g., in order to allow multiple read access, which is required). Also in the Makfile for libmad you may need to remove the "-fforce-mem" flag, which gcc no longer supports.
 
 
 ### Python virtual environment
