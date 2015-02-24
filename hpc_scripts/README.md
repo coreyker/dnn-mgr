@@ -69,5 +69,32 @@ include_dirs = $HOME/.local/include
 ```
 This tells numpy's distutils where to find your locally installed libraries.
 
-Now we can install the numpy packages (using pip, or from github sources, etc). The packages I have installed are: numpy, scipy, theano, pylearn2, pytables, numexpr, cython, pyyaml, ipython, sklearn, matplotlib, scikits.audiolab, scikits.samplerate, pymad. You might try installing these first with "pip install package_name", and if that fails, download the source code and run "python setup.py install". 
+Now we can install the numpy packages (using pip, or from github sources, etc). The packages I have installed are:
+```
+numpy, 
+scipy, 
+theano, 
+pylearn2, 
+pytables, 
+numexpr, 
+cython, 
+pyyaml, 
+ipython, 
+sklearn, 
+matplotlib, 
+scikits.audiolab, 
+scikits.samplerate, 
+pymad (if you need to read mp3's) 
+```
+You might try installing these first with "pip install package_name", and if that fails, download the source code and run "python setup.py install". 
 
+### Theano setup
+If you want theano to use your GPU (and you probably do if you have one), create a file called .theanorc in your home directory with the following lines:
+```
+[global]
+floatX = float32
+device = gpu0
+
+[nvcc]
+fastmath = True
+```
