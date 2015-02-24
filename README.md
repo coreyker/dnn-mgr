@@ -11,6 +11,8 @@ This repository contains research code for experimenting with deep neural networ
 - scikits.audiolab (and libsndfile)
 - scikits-learn
 
+You can find some setup tips in the hpc_scripts folder of this repository
+
 ##V2.0 Instructions
 This version is more flexible than the previous version and has been designed to work with generic datasets (not only the Tzanetakis dataset), with arbitrary categorical labels, and excerpt lengths.
 
