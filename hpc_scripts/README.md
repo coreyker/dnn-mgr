@@ -35,6 +35,7 @@ Add this location to your LD_LIBRARY_PATH too
 ```
 export LD_LIBRARY_PATH=~/.local/lib:$LD_LIBRARY_PATH
 ```
+(that line can be added to .bashrc so that it is excuted in every new shell).
 
 Now download and install the libraries. The following "pseudocode" demonstrates the basic process (you will need to track down the correct urls for your platform):
 ```
