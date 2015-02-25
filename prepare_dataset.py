@@ -255,21 +255,21 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     thop = 10.
     for f in train_list:
         offset, nframes, key, target = file_index[f]
-        sup = np.arange(0,nframes-tframes,int(tframes/thop+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        sup = np.arange(0,nframes-tframes,np.ceil(tframes/thop)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
         train_support.append(offset + sup) 
     train_support = np.hstack(train_support)
     
     valid_support = []
     for f in valid_list:
         offset, nframes, key, target = file_index[f]
-        sup = np.arange(0,nframes-tframes,int(tframes/thop+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        sup = np.arange(0,nframes-tframes,np.ceil(tframes/thop)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
         valid_support.append(offset + sup) 
     valid_support = np.hstack(valid_support)
 
     test_support = []
     for f in test_list:
         offset, nframes, key, target = file_index[f]
-        sup = np.arange(0,nframes-tframes,int(tframes/thop+.5)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
+        sup = np.arange(0,nframes-tframes,np.ceil(tframes/thop)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
         test_support.append(offset + sup)  
     test_support = np.hstack(test_support)
 

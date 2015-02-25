@@ -210,7 +210,7 @@ class SonglevelIterator2d(FiniteDatasetIterator):
         offset, nframes, key, target = self._dataset.file_index[next_file]
 
         thop = 10. # hardcoded and must match prepare_dataset.py!!!
-        sup = np.arange(0,nframes-self._dataset.tframes,int(self._dataset.tframes/thop+.5))
+        sup = np.arange(0,nframes-self._dataset.tframes,np.ceil(self._dataset.tframes/thop))
         next_index = offset + sup
 
         spaces, sources = self._data_specs
