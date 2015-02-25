@@ -103,6 +103,8 @@ pip install -r path/to/requirements.txt
 ```
 If that doesn't work you can try installing these with "pip install package_name", and finally, if that fails, download the source code for each module and run "python setup.py build" followed by "python setup.py install". 
 
+Note: Theano and Pylearn2 should be installed from the github repositories in order to get up-to-date verions (the pip packages seem to be old). 
+
 ### Theano setup
 If you want theano to use your GPU (and you probably do if you have one), create a file called .theanorc in your home directory with the following lines:
 ```
