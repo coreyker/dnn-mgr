@@ -277,9 +277,10 @@ class PreprocLayer(PretrainedLayer):
         nvis = len(self.mean)
 
         if proc_type == 'standardize':
-            dim      = nvis
-            self.biases   = np.array(-self.mean * self.istd, dtype=np.float32)
-            self.weights  = np.array(np.diag(self.istd), dtype=np.float32)
+            dim = nvis
+            mask = (self.istd < 20) # in order to ignore near-zero variance inputs
+            self.biases = np.array(-self.mean * self.istd * mask, dtype=np.float32)
+            self.weights = np.array(np.diag(self.istd * mask), dtype=np.float32)
             
         if proc_type == 'pca_whiten':
             raise NotImplementedError(
