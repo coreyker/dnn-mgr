@@ -350,8 +350,8 @@ if __name__=='__main__':
     parser.add_argument('datadir', help='Path to dataset')
     parser.add_argument('labels', help="A CSV or newline separated list of the dataset's categorical labels")
     parser.add_argument('--hdf5', help='Name of hdf5 file to use')
-    parser.add_argument('--nfft', help='FFT length to use when making hdf5 dataset')
-    parser.add_argument('--nhop', help='Hop size to use when making hdf5 dataset')
+    parser.add_argument('--nfft', help='FFT length to use when making hdf5 dataset',type=int)
+    parser.add_argument('--nhop', help='Hop size to use when making hdf5 dataset',type=int)
 
     #parser.add_argument('--user-defined-partition', action='store_true', help='Use the --train, --valid, --')
     parser.add_argument('--train', help='path to newline seperated list of training files')

@@ -15,8 +15,8 @@ dir_list = ['/home/cmke/Datasets/_tzanetakis_F_500_RSD_allies',
 '/home/cmke/Datasets/_tzanetakis_F_500_RSD_jazz']
 
 ign = 2048
-snr = []
-for d in dir_list:
+snr = [[],[],[]]
+for j,d in enumerate(dir_list):
 	print d
 	for i,f in enumerate(files):
 		print 'iteration ', i
@@ -25,7 +25,10 @@ for d in dir_list:
 		
 		L = min(len(x), len(xhat))
 
-		snr.append(20*np.log10(np.linalg.norm(x[ign:L-ign-1])/np.linalg.norm(np.abs(x[ign:L-ign-1]-xhat[ign:L-ign-1])+1e-12)))
+		snr[j].append(20*np.log10(np.linalg.norm(x[ign:L-ign-1])/np.linalg.norm(np.abs(x[ign:L-ign-1]-xhat[ign:L-ign-1])+1e-12)))
 
-snr_ave = np.mean(snr)
-print 'Ave snr: {}'.format(snr_ave)
+for d,s in zip(dir_list, snr):
+	print 'Directory', d
+	print 'Average SNR', np.mean(s)
+	print 'Std SNR', np.std(s)
+
