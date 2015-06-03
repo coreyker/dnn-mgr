@@ -60,13 +60,14 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     in_batch  = model.get_input_space().make_theano_batch()
     out_batch = model.get_output_space().make_theano_batch()
 
-    cost      = model.cost(one_hot, model.fprop(in_batch))
+    #cost      = model.cost(one_hot, model.fprop(in_batch))
+    cost      = model.cost(out_batch, model.fprop(in_batch))
     #cost      = model.layers[-1].cost(one_hot, model.fprop(in_batch))
-    dCost     = T.grad(cost, in_batch)
+    dCost     = T.grad(cost * n_examples, in_batch)
 
-    grad      = theano.function([in_batch], dCost)
+    grad      = theano.function([in_batch, out_batch], dCost)
     fprop     = theano.function([in_batch], model.fprop(in_batch))
-    fcost     = theano.function([in_batch], cost)
+    fcost     = theano.function([in_batch, out_batch], cost)
 
     # projected gradient:
     last_pred = 0
@@ -74,15 +75,15 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     Y = np.copy(X0)
     Y_old = np.copy(Y)
     t_old = 1
+    print 'cost(X0,y): ', fcost(X0, one_hot)
     for i in xrange(maxits):        
 
         # gradient step        
-        Z = Y - mu * n_examples * grad(Y)
-        print 'cost(X0,y): ', fcost(X0)
-        print 'cost(X{},y): {}'.format(i+1, fcost(Z))
-        pdb.set_trace()
-
-        '''
+        Z = Y - mu  * grad(Y, one_hot)        
+        print 'cost(X{},y): {}'.format(i+1, fcost(Z, one_hot))
+        #pdb.set_trace()
+        #mu*=1.1
+             
         # non-negative projection
         Z = Z * (Z>0)
 
@@ -94,16 +95,18 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
         nu = np.linalg.norm((Z-X0))/n_examples/epsilon - 1 # lagrange multiplier
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
-     
-        # FISTA momentum
-        t = .5 + np.sqrt(1+4*t_old**2)/2.
-        alpha = (t_old - 1)/t
-        Y += alpha * (Y - Y_old)
-        Y_old = np.copy(Y)
-        t_old = t
-        '''
+
         nu=0
         Y=np.copy(Z)
+
+        # FISTA momentum
+        # t = .5 + np.sqrt(1+4*t_old**2)/2.
+        # alpha = (t_old - 1)/t
+        # Y += alpha * (Y - Y_old)
+        # Y_old = np.copy(Y)
+        # t_old = t
+        #'''
+        
 
         # stopping condition
         pred = np.sum(fprop(Y), axis=0)
@@ -243,14 +246,14 @@ if __name__ == '__main__':
 
 
     X_adv, P_adv = find_adversary(model=dnn_model, 
-        X0=X0,#[:1,:],
+        X0=X0,
         label=args.label, 
-        P0=Phs,#[:1,:], 
-        mu=.01, 
+        P0=Phs, 
+        mu=0.1,#1e-7, 
         epsilon=epsilon, 
         maxits=100, 
         stop_thresh=0.9, 
-        griffin_lim=False)
+        griffin_lim=True)
 
     # test advesary
     p1 = np.argmax(np.sum(fprop(X_adv), axis=0))

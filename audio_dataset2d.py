@@ -209,7 +209,7 @@ class SonglevelIterator2d(FiniteDatasetIterator):
         # lookup file's position in the hdf5 array
         offset, nframes, key, target = self._dataset.file_index[next_file]
 
-        thop = 10. # hardcoded and must match prepare_dataset.py!!!
+        thop = 1. # hardcoded and must match prepare_dataset.py!!!
         sup = np.arange(0,nframes-self._dataset.tframes,np.ceil(self._dataset.tframes/thop))
         next_index = offset + sup
 

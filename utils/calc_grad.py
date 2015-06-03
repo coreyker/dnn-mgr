@@ -88,19 +88,21 @@ fprop = function([X],Y)
 
 dX_num = np.zeros(X0.shape)
 for i in range(nvis):
-    X0[:,i] += epsilon
+    tmp = np.copy(X0[:,i])
+    X0[:,i] = tmp + epsilon
     Y_plus  = -np.log(fprop(X0)[:,label])
     
-    X0[:,i] -= 2*epsilon
+    X0[:,i] = tmp - epsilon
     Y_minus = -np.log(fprop(X0)[:,label])
 
-    X0[:,i] += epsilon
+    X0[:,i] = tmp
     dX_num[:,i] = (Y_plus - Y_minus) / (2*epsilon)
 
 # Computation of gradients using Theano
+n_examples = X0.shape[0]
 label_vec = T.vector('label_vec')
 cost  = model.cost(label_vec, model.fprop(X))
-dCost = T.grad(cost, X) 
+dCost = T.grad(cost * n_examples, X) 
 f = function([X, label_vec], dCost)
 
 one_hot = np.zeros(n_classes, dtype=np.float32)

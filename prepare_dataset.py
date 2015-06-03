@@ -252,7 +252,7 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     file_index = param.file_index[0]    
 
     train_support = []
-    thop = 10.
+    thop = 1.
     for f in train_list:
         offset, nframes, key, target = file_index[f]
         sup = np.arange(0,nframes-tframes,np.ceil(tframes/thop)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
