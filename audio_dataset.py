@@ -43,37 +43,12 @@ class AudioDataset(DenseDesignMatrixPyTables):
         self.var       = config['var']
         self.tframes   = config['tframes']
 
-        # if (standardize is True) and (pca_whitening is True):
-        #     raise ValueError("'standardize' and 'pca_whiten' cannot both be True")
-        
-        # if ncomponents is None:
-        #     self.ncomponents = len(self.mean)
-        # else:
-        #     assert ncomponents <= len(self.mean)
-        #     self.ncomponents = ncomponents
-
-        # if (pca_whitening is True):
-        #     S = config['S'][:self.ncomponents]   # eigenvalues
-        #     U = config['U'][:,:self.ncomponents] # eigenvectors            
-        #     self.pca = np.diag(1./(np.sqrt(S) + epsilon)).dot(U.T) 
-
-        # # create linear layer to take care of pre-processing (e.g., standardization or whitening)
-        # pre_layer = Linear(dim=self.ncomponents, layer_name='pre', irange=0, W_lr_scale=0, b_lr_scale=0)
-        # m = MLP(nvis=self.nfft//2+1, layers=[preproc_layer]) # define input layer
-
-        # if standardize is True:
-        #     pre_layer.set_biases(np.array(-self.mean/self.var, dtype=np.float32))
-        #     pre_layer.set_weights(np.diag(np.reciprocal(self.var), dtype=np.float32))
-        #     # self.transform = lambda X: (X-self.mean)/self.var
-        # elif pca_whitening is True:
-        #     pre_layer.set_biases(np.array(-self.mean.dot(self.pca.transpose()), dtype=np.float32))
-        #     pre_layer.set_weights(np.array(self.pca.transpose(), dtype=np.float32))
-        #     #self.transform = lambda X: (X-self.mean).dot(self.pca.transpose())
-        # else:
-        #     pass
-        #     #self.transform = lambda X: X
-
-        super(AudioDataset, self).__init__(X=data.X, y=data.y)
+        if self.tframes > 1:
+            view_converter = DefaultViewConverter((self.tframes, len(self.mean), 1))
+            super(AudioDataset, self).__init__(X=data.X, y=data.y,
+                view_converter=view_converter)
+        else:
+            super(AudioDataset, self).__init__(X=data.X, y=data.y)
     
     def __del__(self):
         self.hdf5.close()   
