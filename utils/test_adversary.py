@@ -102,6 +102,9 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     one_hot = np.zeros((len(sup), n_classes), dtype=np.float32)
     one_hot[:,label] = 1
 
+    X0 = X0[:len(sup)*tframes,:]
+    P0 = P0[:len(sup)*tframes,:]
+
     # projected gradient:
     last_pred = 0
     #Y = np.array(np.random.rand(*X0.shape), dtype=np.float32) 

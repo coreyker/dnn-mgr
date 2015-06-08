@@ -1,5 +1,5 @@
 import os, sys, re, csv, cPickle, argparse
-import scikits.audiolab as audiolab
+from scikits import audiolab, samplerate
 from utils.read_mp3 import read_mp3
 from sklearn.externals import joblib
 import numpy as np
@@ -8,6 +8,7 @@ from theano import tensor as T
 from pylearn2.utils import serial
 from audio_dataset import AudioDataset
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
+from pylearn2.datasets.dense_design_matrix import DefaultViewConverter
 import pylearn2.config.yaml_parse as yaml_parse
 from test_adversary import winfunc, compute_fft, overlap_add, griffin_lim_proj, find_adversary, aggregate_features
 import pdb
@@ -22,8 +23,29 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
 
     X     = dnn_model.get_input_space().make_theano_batch()
     Y     = dnn_model.fprop(X)
-    fprop = theano.function([X],Y)
+    fprop_theano = theano.function([X],Y)
+
+    input_space = dnn_model.get_input_space()
+    if isinstance(input_space, Conv2DSpace):
+        tframes, dim = input_space.shape
+        view_converter = DefaultViewConverter((tframes, dim, 1))
+    else:
+        dim = input_space.dim        
+        tframes = 1
+        view_converter = None
     
+    nframes = 1200 # hardcoded for the moment (should change)
+    thop = 1.
+    sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
+
+    if view_converter:
+        def fprop(batch):
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            return fprop_theano(view_converter.get_formatted_batch(data, input_space))
+
+    else:
+        fprop = fprop_theano
+
     n_examples   = len(dataset.file_list)
     target_space = dnn_model.get_output_space() #VectorSpace(dim=n_classes)
     feat_space   = dnn_model.get_input_space() #VectorSpace(dim=dataset.nfft//2+1, dtype='complex64')
@@ -52,6 +74,7 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 target = np.random.randint(n_classes)
 
             if 1: # re-read audio (seems to be bug when reading from h5)
+                f = el[2]
                 if f.endswith('.wav'):
                     read_fun = audiolab.wavread             
                 elif f.endswith('.au'):
@@ -59,7 +82,19 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 elif f.endswith('.mp3'):
                     read_fun = read_mp3
 
-                x,_,_ = read_fun(root_dir + el[2])
+                x, fstmp, _ = read_fun(os.path.join(root_dir, f))
+
+                # make mono
+                if len(x.shape) != 1: 
+                    x = np.sum(x, axis=1)/2.
+
+                seglen=30
+                x = x[:fstmp*seglen]
+
+                fs = 22050
+                if fstmp != fs:
+                    x = samplerate.resample(x, fs/float(fstmp), 'sinc_best')
+
                 Mag, Phs = compute_fft(x)
                 Mag = Mag[:,:513]
                 Phs = Phs[:,:513]
