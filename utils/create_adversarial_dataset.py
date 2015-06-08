@@ -33,13 +33,12 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
         dim = input_space.dim        
         tframes = 1
         view_converter = None
-    
-    nframes = 1200 # hardcoded for the moment (should change)
-    thop = 1.
-    sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
 
     if view_converter:
         def fprop(batch):
+            nframes = batch.shape[0]
+            thop = 1.
+            sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
             data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
             return fprop_theano(view_converter.get_formatted_batch(data, input_space))
 
