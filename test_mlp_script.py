@@ -23,7 +23,7 @@ def frame_misclass_error(model, dataset):
     
     confusion  = np.zeros((n_classes, n_classes))
     
-    batch_size   = 2400
+    batch_size   = 30
     n_examples   = len(dataset.support) // batch_size
     target_space = VectorSpace(dim=n_classes)
     data_specs   = (CompositeSpace((feat_space, target_space)), ("features", "targets"))     
