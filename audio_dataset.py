@@ -83,7 +83,7 @@ class AudioDataset(DenseDesignMatrixPyTables):
 
         convert = []
         for sp, src in safe_zip(sub_spaces, sub_sources):
-            if src == 'features' and \
+            if (src == 'features' or src == 'songlevel-features') and \
                getattr(self, 'view_converter', None) is not None:
                 conv_fn = (lambda batch, self=self, space=sp:
                            self.view_converter.get_formatted_batch(batch,
