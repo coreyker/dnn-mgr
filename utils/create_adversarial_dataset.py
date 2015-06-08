@@ -1,5 +1,6 @@
 import os, sys, re, csv, cPickle, argparse
 import scikits.audiolab as audiolab
+from utils.read_mp3 import read_mp3
 from sklearn.externals import joblib
 import numpy as np
 import theano
@@ -12,7 +13,7 @@ from test_adversary import winfunc, compute_fft, overlap_add, griffin_lim_proj, 
 import pdb
 
 
-def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None):
+def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None):
     """
     Function to compute the file-level classification error by classifying
     individual frames and then voting for the class with highest cumulative probability
@@ -51,7 +52,14 @@ def file_misclass_error_printf(dnn_model, dataset, save_file, mode='all_same', l
                 target = np.random.randint(n_classes)
 
             if 1: # re-read audio (seems to be bug when reading from h5)
-                x,_,_ = audiolab.wavread('/home/cmke/Datasets/_tzanetakis_genre/'+el[2])
+                if f.endswith('.wav'):
+                    read_fun = audiolab.wavread             
+                elif f.endswith('.au'):
+                    read_fun = audiolab.auread
+                elif f.endswith('.mp3'):
+                    read_fun = read_mp3
+
+                x,_,_ = read_fun(root_dir + el[2])
                 Mag, Phs = compute_fft(x)
                 Mag = Mag[:,:513]
                 Phs = Phs[:,:513]
@@ -108,7 +116,8 @@ if __name__ == '__main__':
     # three variants
     parser.add_argument('--mode', help='either all_same, perfect, or random')
     parser.add_argument('--label', type=int, help='label to minimize loss on (only used in all_same mode)')
-    
+    parser.add_argument('--root_dir', help='dataset directory')
+
     parser.add_argument('--dnn_save_file', help='txt file to save results in')
     parser.add_argument('--aux_save_file', help='txt file to save results in')
     parser.add_argument('--save_adversary_audio', help='path to save adversaries')
@@ -135,7 +144,8 @@ if __name__ == '__main__':
 
     file_misclass_error_printf(
         dnn_model=dnn_model, 
-        dataset=testset, 
+        root_dir=args.root_dir,
+        dataset=testset,         
         save_file=args.dnn_save_file, 
         mode=args.mode, 
         label=args.label, 
