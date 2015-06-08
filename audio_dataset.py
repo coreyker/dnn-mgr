@@ -3,7 +3,7 @@ import functools
 import tables
 
 from pylearn2.datasets.dataset import Dataset
-from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables
+from pylearn2.datasets.dense_design_matrix import DenseDesignMatrixPyTables, DefaultViewConverter
 from pylearn2.blocks import Block
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 from pylearn2.utils.iteration import SubsetIterator, FiniteDatasetIterator, resolve_iterator_class

@@ -22,8 +22,7 @@ module load python/2.7.3 cuda/6.5
 export LD_LIBRARY_PATH=~/.local/lib:$LD_LIBRARY_PATH
 source ~/venv/bin/activate
 cd /dtu-compute/cosound/data/_latinmusicdataset/
-python ~/dnn-mgr/train_mlp_script.py \
+python ~/dnn-mgr/train_mlp_conv_script.py \
     /dtu-compute/cosound/data/_latinmusicdataset/LMD_split_conv_config.pkl \
-    ~/dnn-mgr/yaml_scripts/mlp_rlu_conv.yaml \
-    --nunits 500 \
+    ~/dnn-mgr/yaml_scripts/mlp_rlu_conv2.yaml \
     --output ~/dnn-mgr/lmd/lmd_513_conv.pkl
