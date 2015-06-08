@@ -7,6 +7,7 @@ import theano
 from theano import tensor as T
 from pylearn2.utils import serial
 from audio_dataset import AudioDataset
+from pylearn2.datasets.dense_design_matrix import DefaultViewConverter
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
 from utils.read_mp3 import read_mp3
@@ -52,11 +53,8 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
     nfft = 2*(X0.shape[1]-1)
     nhop = nfft//2
-    
-    one_hot               = np.zeros((n_examples, n_classes), dtype=np.float32)
-    one_hot[:,label]      = 1
 
-    # Set-up gradient computation w/ Theano
+    # Set-up gradient computation w/ Theano    
     in_batch  = model.get_input_space().make_theano_batch()
     out_batch = model.get_output_space().make_theano_batch()
 
@@ -65,9 +63,44 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     #cost      = model.layers[-1].cost(one_hot, model.fprop(in_batch))
     dCost     = T.grad(cost * n_examples, in_batch)
 
-    grad      = theano.function([in_batch, out_batch], dCost)
-    fprop     = theano.function([in_batch], model.fprop(in_batch))
-    fcost     = theano.function([in_batch, out_batch], cost)
+    grad_theano = theano.function([in_batch, out_batch], dCost)
+    fprop_theano = theano.function([in_batch], model.fprop(in_batch))
+    fcost_theano = theano.function([in_batch, out_batch], cost)
+
+    input_space = model.get_input_space()
+    if isinstance(input_space, Conv2DSpace):
+        tframes, dim = input_space.shape
+        view_converter = DefaultViewConverter((tframes, dim, 1))
+    else:
+        dim = input_space.dim        
+        tframes = 1
+        view_converter = None
+
+    nframes = X0.shape[0]
+    thop = 1.
+    sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
+
+    if view_converter:
+        def grad(batch, labels):            
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            topo_view = grad_theano(view_converter.get_formatted_batch(data, input_space), labels)
+            design_mat = view_converter.topo_view_to_design_mat(topo_view)
+            return np.vstack([np.reshape(r, (tframes, dim)) for r in design_mat])
+
+        def fprop(batch):
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            return fprop_theano(view_converter.get_formatted_batch(data, input_space))
+
+        def fcost(batch, labels):
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            return fcost_theano(view_converter.get_formatted_batch(data, input_space), labels)
+    else:
+        grad = grad_theano
+        fprop = fprop_theano
+        fcost = fcost_theano        
+    
+    one_hot = np.zeros((len(sup), n_classes), dtype=np.float32)
+    one_hot[:,label] = 1
 
     # projected gradient:
     last_pred = 0
@@ -79,16 +112,14 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     for i in xrange(maxits):        
 
         # gradient step        
-        Z = Y - mu  * grad(Y, one_hot)        
+        g = grad(Y, one_hot)
+        Z = Y - mu  * g
         print 'cost(X{},y): {}'.format(i+1, fcost(Z, one_hot))
-        #pdb.set_trace()
-        #mu*=1.1
              
         # non-negative projection
         Z = Z * (Z>0)
 
         if griffin_lim:
-            #if i%20==0:
             Z, P0 = griffin_lim_proj(np.hstack((Z, Z[:,-2:-nfft/2-1:-1])), P0, its=0)
         
         # maximum allowable signal-to-noise projection
@@ -96,15 +127,15 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
 
-        nu=0
-        Y=np.copy(Z)
+        #nu=0
+        #Y=np.copy(Z)
 
         # FISTA momentum
-        # t = .5 + np.sqrt(1+4*t_old**2)/2.
-        # alpha = (t_old - 1)/t
-        # Y += alpha * (Y - Y_old)
-        # Y_old = np.copy(Y)
-        # t_old = t
+        t = .5 + np.sqrt(1+4*t_old**2)/2.
+        alpha = (t_old - 1)/t
+        Y += alpha * (Y - Y_old)
+        Y_old = np.copy(Y)
+        t_old = t
         #'''
         
 
@@ -200,7 +231,7 @@ if __name__ == '__main__':
     dnn_model   = serial.load(args.dnn_model)
     input_space = dnn_model.get_input_space()
     batch       = input_space.make_theano_batch()
-    fprop       = theano.function([batch], dnn_model.fprop(batch))
+    fprop_theano = theano.function([batch], dnn_model.fprop(batch))
 
     # load audio file
     if args.test_file.endswith('.wav'):
@@ -213,7 +244,8 @@ if __name__ == '__main__':
     x, fs, fmt = read_fun(args.test_file)
     
     # limit to first 30 seconds
-    x = x[:30*fs]
+    seglen = 30
+    x = x[:seglen*fs]
     
     # make sure format agrees with training data
     if len(x.shape)!=1:
@@ -225,31 +257,50 @@ if __name__ == '__main__':
         x = samplerate.resample(x, 22050./fs, 'sinc_best')
         fs = 22050
 
-    # compute fft of data
-    nfft = 2*(input_space.dim-1)
+    if isinstance(input_space, Conv2DSpace):
+        tframes, dim = input_space.shape
+        view_converter = DefaultViewConverter((tframes, dim, 1))
+    else:
+        dim = input_space.dim        
+        tframes = 1
+        view_converter = None
+
+    nfft = 2*(dim-1)
     nhop = nfft//2
     nframes = (len(x)-nfft)/nhop
     x = x[:(nframes-1)*nhop + nfft] # truncate input to multiple of hopsize
 
+    # format batches for 1d/2d nets
+    thop = 1.
+    sup  = np.arange(0,nframes-tframes+1, np.int(tframes/thop))     
+    if view_converter:
+        def fprop(batch):
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            fprop_theano(view_converter.get_formatted_batch(data, input_space))
+    else:
+        fprop = fprop_theano
+
+    # comput fft of input file
     # smooth boundaries to prevent a click
     win = winfunc(2048)
     x[:1024]  *= win[:1024]
     x[-1024:] *= win[1024:]
     Mag, Phs = compute_fft(x, nfft, nhop)
 
-    X0 = Mag[:,:input_space.dim]
+    X0 = Mag[:len(sup)*tframes,:dim]
+    P0 = Phs[:len(sup)*tframes,:]
+
     prediction = np.argmax(np.sum(fprop(X0), axis=0))
     print 'Predicted label on original file: ', prediction
 
     snr = 15.
     epsilon = np.linalg.norm(X0)/X0.shape[0]/10**(snr/20.)
 
-
     X_adv, P_adv = find_adversary(model=dnn_model, 
         X0=X0,
         label=args.label, 
-        P0=Phs, 
-        mu=0.1,#1e-7, 
+        P0=P0, 
+        mu=0.1, 
         epsilon=epsilon, 
         maxits=100, 
         stop_thresh=0.9, 
@@ -263,7 +314,7 @@ if __name__ == '__main__':
     x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
 
     Mag2, Phs2 = compute_fft(x_adv, nfft, nhop)
-    p2 = np.argmax(np.sum(fprop(Mag2[:,:input_space.dim]), axis=0))
+    p2 = np.argmax(np.sum(fprop(Mag2[:len(sup)*tframes,:dim]), axis=0))
     print 'Predicted label on adversarial example (after re-synthesis): ', p2
 
     if args.filter:
