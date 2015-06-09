@@ -119,7 +119,9 @@ def file_misclass_error_printf(model, dataset, save_file, label_list=None):
                 vote_label   = np.argmax(hist) # most used label
                 true_label   = el[1] #np.argmax(el[1])
 
+            #csvwriter.writerow([dataset.file_list[i], true_label, vote_label])            
             csvwriter.writerow([dataset.file_list[i], true_label, vote_label])            
+
             # fname.write('{file_name}\t{true_label}\t{vote_label}\n'.format(
             #     file_name =dataset.file_list[i], 
             #     true_label=true_label,
@@ -225,7 +227,7 @@ if __name__ == '__main__':
     if args.majority_vote:
         print 'Using majority vote'
         if args.save_file:
-            file_misclass_error_printf(model, dataset, args.save_file, label_list)
+            file_misclass_error_printf(model, dataset, args.save_file)#, label_list)
         else:
             err, conf = file_misclass_error(model, dataset)
     else:
