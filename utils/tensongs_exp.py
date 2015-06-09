@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     # tunable alg. parameters
     snr = 15.
-    mu  = .05
+    mu  = .1
     stop_thresh = .9
     maxits = 100
 
@@ -143,7 +143,11 @@ if __name__ == '__main__':
                 griffin_lim=True)
 
             # get time-domain representation
-            x_adv   = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
+            x_adv = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
+            
+            minlen = min(len(x_adv), len(x))
+            x_adv = x_adv[:minlen]
+            x = x[:minlen] 
             out_snr = 20*np.log10(np.linalg.norm(x[nfft:-nfft]) / np.linalg.norm(x[nfft:-nfft]-x_adv[nfft:-nfft]))
 
            # dnn prediction
