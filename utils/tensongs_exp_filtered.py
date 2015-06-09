@@ -177,7 +177,7 @@ if __name__ == '__main__':
     description='')
     parser.add_argument('--dnn_model', help='dnn model to use for features')
     parser.add_argument('--aux_model', help='(auxilliary) model trained on dnn features')
-    parser.add_argument('--in_path', help='directory with files to test model on')
+    parser.add_argument('--in_path', help='file to test model on')
     parser.add_argument('--out_path', help='location for saving adversary (name automatically generated)')
 
     args = parser.parse_args()
@@ -187,6 +187,7 @@ if __name__ == '__main__':
     mu  = .05
     stop_thresh = .9
     maxits = 100
+    cut_freq = 9000.
 
     label_list = ['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock']
     targets     = range(len(label_list))
@@ -208,12 +209,17 @@ if __name__ == '__main__':
     # fft params
     nfft = 2*(input_space.dim-1)
     nhop = nfft//2
-    win = winfunc(2048)
+    win = winfunc(1024)
     
+    # design lowpass filter.
+    b,a = sp.signal.butter(4, cut_freq/(22050./2.))
+
     flist = glob.glob(args.in_path +'*.wav')
 
     dnn_file = open(os.path.join(args.out_path, stripf(args.dnn_model) + '.adversaries.txt'), 'w')
+    dnn_file_filt = open(os.path.join(args.out_path, stripf(args.dnn_model) + '.adversaries.filtered.txt'), 'w')
     aux_file = open(os.path.join(args.out_path, stripf(args.aux_model) + '.adversaries.txt'), 'w')
+    aux_file_filt = open(os.path.join(args.out_path, stripf(args.aux_model) + '.adversaries.filtered.txt'), 'w')
 
     for f in flist:
         fname = stripf(f)
@@ -235,8 +241,8 @@ if __name__ == '__main__':
         x = x[:(nframes-1)*nhop + nfft] 
 
         # smooth boundaries to prevent a click    
-        x[:1024]  *= win[:1024]
-        x[-1024:] *= win[1024:]
+        x[:512]  *= win[:512]
+        x[-512:] *= win[512:]
 
         # compute mag. spectra
         Mag, Phs = compute_fft(x, nfft, nhop)
@@ -246,8 +252,10 @@ if __name__ == '__main__':
 
         # write file name
         dnn_file.write('{}\t'.format(fname))
+        dnn_file_filt.write('{}\t'.format(fname))
         aux_file.write('{}\t'.format(fname))
- 
+        aux_file_filt.write('{}\t'.format(fname))
+
         for t in targets:
 
             # search for adversary
@@ -266,7 +274,9 @@ if __name__ == '__main__':
             x_adv   = overlap_add( np.hstack((X_adv, X_adv[:,-2:-nfft/2-1:-1])) * np.exp(1j*P_adv))
             out_snr = 20*np.log10(np.linalg.norm(x[nfft:-nfft]) / np.linalg.norm(x[nfft:-nfft]-x_adv[nfft:-nfft]))
 
-           # dnn prediction
+            # BEFORE FILTERING
+            # ===========================================
+            # dnn prediction
             pred = np.argmax(np.sum(fprop(X_adv), axis=0))
             if pred == t:
                 dnn_file.write('{}\t'.format(int(out_snr+.5)))
@@ -281,6 +291,28 @@ if __name__ == '__main__':
             else:
                 aux_file.write('{}\t'.format('na'))
 
+            # filtered representation
+            x_filt = sp.signal.lfilter(b,a,x_adv)
+            Mag2, Phs2 = compute_fft(x_filt, nfft, nhop)
+            X_adv_filt = Mag2[:,:input_space.dim]            
+
+            # AFTER FILTERING
+            # ==================================================
+            # dnn prediction
+            pred = np.argmax(np.sum(fprop(X_adv_filt), axis=0))
+            if pred == t:
+                dnn_file_filt.write('{}\t'.format('x'))
+            else:
+                dnn_file_filt.write('{}\t'.format('o'))
+
+            # aux prediction
+            X_adv_agg_filt = aggregate_features(dnn_model, X_adv_filt, which_layers)
+            pred = np.argmax(np.bincount(np.array(aux_model.predict(X_adv_agg_filt), dtype='int')))
+            if pred == t:
+                aux_file_filt.write('{}\t'.format('x'))
+            else:
+                aux_file_filt.write('{}\t'.format('o'))
+
             # SAVE ADVERSARY FILES
             out_file = os.path.join(args.out_path,
             '{fname}.{label}.adversary.{snr}dB.wav'.format(
@@ -289,9 +321,18 @@ if __name__ == '__main__':
                 snr=int(out_snr+.5)))
             audiolab.wavwrite(x_adv, out_file, fs, fmt)
 
+            out_file2 = os.path.join(args.out_path,
+            '{fname}.{label}.adversary.filtered.wav'.format(
+                fname=fname,
+                label=label_list[t]))
+            audiolab.wavwrite(x_filt, out_file2, fs, fmt)
+
         dnn_file.write('\n'.format(fname))
+        dnn_file_filt.write('\n'.format(fname))
         aux_file.write('\n'.format(fname))
-    
+        aux_file_filt.write('\n'.format(fname))
+
     dnn_file.close()
+    dnn_file_filt.close()
     aux_file.close()
-    
+    aux_file_filt.close()
