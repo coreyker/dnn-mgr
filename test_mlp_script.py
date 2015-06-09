@@ -230,11 +230,17 @@ if __name__ == '__main__':
             err, conf = file_misclass_error(model, dataset)
     else:
         print 'Not using majority vote'
-        if args.save_file:
-            raise ValueError('--save_file option only supported for majority vote currently')            
-        else:
-            err, conf = frame_misclass_error(model, dataset)    
-    
+        # if args.save_file:
+        #     raise ValueError('--save_file option only supported for majority vote currently')            
+        # else:
+        #     err, conf = frame_misclass_error(model, dataset)
+        err, conf = frame_misclass_error(model, dataset)
+        with open(args.save_file, 'wb') as fname:
+            csvwriter = csv.writer(fname, delimiter='\t')
+            for r in conf:
+                csvwriter.writerow(r)
+
+
     if not args.save_file:
         conf = conf.transpose()
         print 'test accuracy: %2.2f' % (100-err)
