@@ -172,7 +172,7 @@ if __name__ == '__main__':
                 fname=fname,
                 label=label_list[t],
                 snr=int(out_snr+.5)))
-            audiolab.wavwrite(x_adv, out_file, fs, fmt)
+            audiolab.wavwrite(x_adv, out_file, fs)
 
         dnn_file.write('\n'.format(fname))
         if args.aux_model:
