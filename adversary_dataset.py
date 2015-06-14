@@ -50,10 +50,10 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
 
         if self.tframes > 1:
             view_converter = DefaultViewConverter((self.tframes, len(self.mean), 1))
-            super(AudioDataset, self).__init__(X=data.X, y=data.y,
+            super(AdversaryDataset, self).__init__(X=data.X, y=data.y,
                 view_converter=view_converter)
         else:
-            super(AudioDataset, self).__init__(X=data.X, y=data.y)
+            super(AdversaryDataset, self).__init__(X=data.X, y=data.y)
     
     def __del__(self):
         self.hdf5.close()   
@@ -167,17 +167,17 @@ class FramelevelIterator(FiniteDatasetIterator):
                 design_mat = []
                 for index in next_index:                    
                     X = np.abs(data[index:index+self._dataset.tframes, :])
+                    X, _ = find_adversary(
+                        self._dataset.adv_model,
+                        X,
+                        self._dataset.targets[np.random.randint(len(self._dataset.targets))],
+                        mu=.25,
+                        epsilon=np.linalg.norm(X)/X.shape[0]/10**(15./20.),
+                        maxits=1,
+                        stop_thresh=0.75
+                        )
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
-                design_mat, _ = find_adversary(
-                    self.adv_model, 
-                    design_mat, 
-                    label,                 
-                    mu=.25, 
-                    epsilon=np.linalg.norm(design_mat)/design_mat.shape[0]/10**(15./20.), 
-                    maxits=1,
-                    stop_thresh=0.75
-                    )
 
                 if fn:
                     output.append( fn(design_mat) )
@@ -308,28 +308,4 @@ class PreprocLayer(PretrainedLayer):
     def get_param_values(self):
         return list((self.get_weights(), self.get_biases()))
 
-if __name__=='__main__':
-
-    # tests
-    import theano
-    import cPickle
-    from audio_dataset import AudioDataset
-
-    with open('GTZAN_stratified.pkl') as f: 
-        config = cPickle.load(f)
-    
-    D = AudioDataset(config)
-    
-    feat_space   = VectorSpace(dim=D.X.shape[1])
-    feat_space_complex = VectorSpace(dim=D.X.shape[1], dtype='complex64')
-    target_space = VectorSpace(dim=len(D.label_list))
-    
-    data_specs_frame = (CompositeSpace((feat_space,target_space)), ("features", "targets"))
-    data_specs_song = (CompositeSpace((feat_space_complex, target_space)), ("songlevel-features", "targets"))
-
-    framelevel_it = D.iterator(mode='sequential', batch_size=10, data_specs=data_specs_frame)
-    frame_batch = framelevel_it.next()
-
-    songlevel_it = D.iterator(mode='sequential', batch_size=1, data_specs=data_specs_song)    
-    song_batch = songlevel_it.next()
 

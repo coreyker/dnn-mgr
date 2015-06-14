@@ -1,6 +1,6 @@
 !obj:pylearn2.train.Train {
     dataset : &trainset !obj:adversary_dataset.AdversaryDataset {
-        adv_model: &adv_model !pkl: "lmd_af/lmd_af_513_500x3.cpu.pkl",
+        adv_model: &adv_model !pkl: "lmd_af/lmd_af_513_500x3.pkl",
         which_set : 'train',
         config : &fold !pkl: "%(fold_config)s"
     },

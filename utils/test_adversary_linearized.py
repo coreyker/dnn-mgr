@@ -103,7 +103,7 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     one_hot[:,label] = 1
 
     X0 = X0[:len(sup)*tframes,:]
-    P0 = P0[:len(sup)*tframes,:]
+    if P0 is not None: P0 = P0[:len(sup)*tframes,:]
 
     # projected gradient:
     last_pred = 0
@@ -111,13 +111,13 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     Y = np.copy(X0)
     Y_old = np.copy(Y)
     t_old = 1
-    print 'cost(X0,y): ', fcost(X0, one_hot)
+    #print 'cost(X0,y): ', fcost(X0, one_hot)
     for i in xrange(maxits):        
 
         # gradient step        
         g = grad(Y, one_hot)
         Z = Y - mu  * np.sign(g)
-        print 'cost(X{},y): {}'.format(i+1, fcost(Z, one_hot))
+        #print 'cost(X{},y): {}'.format(i+1, fcost(Z, one_hot))
              
         # non-negative projection
         Z = Z * (Z>0)
@@ -130,30 +130,25 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
 
-        #nu=0
-        #Y=np.copy(Z)
-
         # FISTA momentum
-        t = .5 + np.sqrt(1+4*t_old**2)/2.
-        alpha = (t_old - 1)/t
-        Y += alpha * (Y - Y_old)
-        Y_old = np.copy(Y)
-        t_old = t
+        # t = .5 + np.sqrt(1+4*t_old**2)/2.
+        # alpha = (t_old - 1)/t
+        # Y += alpha * (Y - Y_old)
+        # Y_old = np.copy(Y)
+        # t_old = t
         #'''
         
         # stopping condition
-        pred = np.sum(fprop(Y), axis=0)
-        pred /= np.sum(pred)
+        # pred = np.sum(fprop(Y), axis=0)
+        # pred /= np.sum(pred)
 
-        #print 'iteration: {}, pred[label]: {}, nu: {}'.format(i, pred[label], nu)
-        print 'iteration: {}, pred[label]: {}, nu: {}, snr: {}'.format(i, pred[label], nu, 20*np.log10(np.linalg.norm(X0)/np.linalg.norm(Y-X0)))
+        #print 'iteration: {}, pred[label]: {}, nu: {}, snr: {}'.format(i, pred[label], nu, 20*np.log10(np.linalg.norm(X0)/np.linalg.norm(Y-X0)))
 
-        if pred[label] > stop_thresh:
-            break
-        elif pred[label] < last_pred - 1e-4:
-            pass#break
-        last_pred = pred[label]
-
+        # if pred[label] > stop_thresh:
+        #     break
+        # elif pred[label] < last_pred - 1e-4:
+        #     pass#break
+        # last_pred = pred[label]
     return Y, P0
 
 winfunc = lambda x: np.hanning(x)

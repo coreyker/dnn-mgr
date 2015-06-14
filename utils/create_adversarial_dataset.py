@@ -103,9 +103,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 X0=Mag, 
                 label=target, 
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
-                mu=.1, 
+                mu=.15, 
                 epsilon=epsilon, 
-                maxits=100, 
+                maxits=50, 
                 stop_thresh=0.9, 
                 griffin_lim=True)
             
