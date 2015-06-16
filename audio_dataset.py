@@ -251,7 +251,9 @@ class PreprocLayer(PretrainedLayer):
 
         # load parition information
         self.mean    = config['mean']
+        self.mean    = self.mean.reshape((np.prod(self.mean.shape),))
         self.istd    = np.reciprocal(np.sqrt(config['var']))
+        self.istd    = self.istd.reshape((np.prod(self.istd.shape),))
         self.tframes = config['tframes']
         nvis = len(self.mean)
 
