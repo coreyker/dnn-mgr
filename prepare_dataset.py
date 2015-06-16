@@ -258,7 +258,7 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
         sup = np.arange(0,nframes-tframes,np.int(tframes/thop)) # hardcoded for now (!!must match with audio_dataset2d songlevel iterator!!)
         train_support.append(offset + sup) 
     train_support = np.hstack(train_support)
-    
+
     valid_support = []
     for f in valid_list:
         offset, nframes, key, target = file_index[f]
@@ -274,23 +274,48 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
     test_support = np.hstack(test_support)
 
     # compute mean and std for training set only
-    nsamples = len(train_support)*tframes
-    if compute_std:
-        sum_x  = np.zeros(nfeats, dtype=np.float32)
-        sum_x2 = np.zeros(nfeats, dtype=np.float32)        
-        
-        for n,i in enumerate(train_support):
-            sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
-            sys.stdout.flush()
-            for j in xrange(tframes):                       
-                
-                fft_frame = np.abs(data.X[i+j,:])
-                sum_x  += fft_frame
-                sum_x2 += fft_frame**2
-        print ''
+    class_means = None
+    class_vars = None
 
-        mean = sum_x / nsamples
-        var  = (sum_x2 - sum_x**2/nsamples)/(nsamples-1)
+    if compute_std:      
+        
+        nclasses = len(param.targets[0])
+        sum_x = np.zeros((nclasses, tframes, nfeats), dtype=np.float32)
+        sum_x2 = np.zeros((nclasses, tframes, nfeats), dtype=np.float32)
+
+        nsamples = np.zeros(nclasses)
+        for f in train_list:
+            offset, nframes, key, target = file_index[f]
+            sup = offset + np.arange(0,nframes-tframes,np.int(tframes/thop))
+            
+            for i in sup:                                
+                fft_frame = np.abs(data.X[i:i+tframes,:])
+                sum_x[target] += fft_frame
+                sum_x2[target] += fft_frame**2
+                nsamples[target] += 1
+
+        class_means = sum_x / nsamples.reshape((nclasses,1,1))
+        class_vars = (sum_x2 - sum_x**2 / nsamples.reshape((nclasses,1,1))) / (nsamples.reshape((nclasses,1,1))-1)
+
+        mean = np.mean(class_means, axis=0)
+        var = np.var(class_vars, axis=0)
+
+        # nsamples = len(train_support)*tframes
+        # sum_x  = np.zeros(nfeats, dtype=np.float32)
+        # sum_x2 = np.zeros(nfeats, dtype=np.float32)  
+        
+        # for n,i in enumerate(train_support):
+        #     sys.stdout.write('\rComputing mean and variance of training set: %2.2f%%' % (n*tframes/float(nsamples)*100))
+        #     sys.stdout.flush()
+        #     for j in xrange(tframes):                       
+                
+        #         fft_frame = np.abs(data.X[i+j,:])
+        #         sum_x  += fft_frame
+        #         sum_x2 += fft_frame**2
+        # print ''
+
+        # mean = sum_x / nsamples
+        # var  = (sum_x2 - sum_x**2/nsamples)/(nsamples-1)
     else:
         mean = np.zeros(nfeats)
         var  = np.ones(nfeats)
@@ -324,6 +349,8 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
         'train_files' : train_list,
         'valid_files' : valid_list,
         'test_files' : test_list,
+        'class_means' : class_means,
+        'class_vars' : class_vars,
         'mean' :  mean,
         'var' :   var,
         'tframes' : tframes,
