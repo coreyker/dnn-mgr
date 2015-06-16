@@ -16,8 +16,8 @@ from pylearn2.utils import contains_nan
 from pylearn2.models.mlp import MLP, Linear, PretrainedLayer
 from pylearn2.models.autoencoder import Autoencoder
 
-#from utils.test_adversary import find_adversary
-from utils.test_adversary_linearized import find_adversary
+#from utils.test_adversary_linearized import find_adversary
+import theano
 from theano import config
 from theano import tensor as T
 
@@ -54,40 +54,34 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
         dCost     = T.grad(cost, in_batch)
 
         grad_theano  = theano.function([in_batch, out_batch], dCost)
-        fprop_theano = theano.function([in_batch], model.fprop(in_batch))
+        fprop_theano = theano.function([in_batch], adv_model.fprop(in_batch))
         fcost_theano = theano.function([in_batch, out_batch], cost)
 
-        if isinstance(adv_model.get_input_space(), Conv2DSpace):
-            tframes, dim   = input_space.shape
+        self.input_space = adv_model.get_input_space()
+        if isinstance(self.input_space, Conv2DSpace):
+            tframes, dim   = self.input_space.shape
             view_converter = DefaultViewConverter((tframes, dim, 1))
 
-            # def grad(batch, labels):            
-            #     data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
-            #     topo_view = grad_theano(view_converter.get_formatted_batch(data, input_space), labels)
-            #     design_mat = view_converter.topo_view_to_design_mat(topo_view)
-            #     return np.vstack([np.reshape(r, (tframes, dim)) for r in design_mat])
+            def grad(batch, labels):            
+                 topo_view = grad_theano(view_converter.get_formatted_batch(batch, self.input_space), labels)
+                 return view_converter.topo_view_to_design_mat(topo_view)
 
-            # def fprop(batch):
-            #     data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
-            #     return fprop_theano(view_converter.get_formatted_batch(data, input_space))
+            def fprop(batch):
+                 return fprop_theano(view_converter.get_formatted_batch(batch, self.input_space))
 
-            # def fcost(batch, labels):
-            #     data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
-            #     return fcost_theano(view_converter.get_formatted_batch(data, input_space), labels)
+            def fcost(batch, labels):
+                 return fcost_theano(view_converter.get_formatted_batch(batch, self.input_space), labels)
 
-            # self.grad = grad
-            # self.fprop = fprop
-            # self.fcost = fcost
+            self.grad = grad
+            self.fprop = fprop
+            self.fcost = fcost
 
-            self.grad = grad_theano
-            self.fprop = fprop_theano
-            self.fcost = fcost_theano 
             
             super(AdversaryDataset, self).__init__(X=data.X, y=data.y,
                 view_converter=view_converter)
 
         else:
-            dim = input_space.dim        
+            dim = self.input_space.dim        
             tframes = 1
             view_converter = None
 
@@ -100,17 +94,17 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
     def __del__(self):
         self.hdf5.close()   
     
-    def create_adversary_from_batch(batch, label, snr=15):
+    def create_adversary_from_batch(self, batch, label, mu=0.25, snr=15):
         n_examples = batch.shape[0]
         epsilon = np.linalg.norm(batch)/n_examples/10**(snr/20.)
 
         g = self.grad(batch, label) * n_examples
-        Z = Z - mu * np.sign(g)
+        Z = batch - mu * np.sign(g)
         Z = Z * (Z>0)
 
         nu = np.linalg.norm((Z-batch))/n_examples/epsilon - 1 # lagrange multiplier
         nu = nu * (nu>=0)
-        Y  = (Z + nu*X0) / (1+nu)
+        Y  = (Z + nu*batch) / (1+nu)
         return Y
 
     @functools.wraps(Dataset.iterator)
@@ -222,18 +216,23 @@ class FramelevelIterator(FiniteDatasetIterator):
                 design_mat = []
                 for index in next_index:                    
                     X = np.abs(data[index:index+self._dataset.tframes, :])
-                    X, _ = find_adversary(
-                        self._dataset.adv_model,
-                        X,
-                        self._dataset.targets[np.random.randint(len(self._dataset.targets))],
-                        mu=.25,
-                        epsilon=np.linalg.norm(X)/X.shape[0]/10**(15./20.),
-                        maxits=1,
-                        stop_thresh=0.75
-                        )
-                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
-                design_mat = np.vstack(design_mat)
+                    design_mat.append( X.reshape((np.prod(X.shape),)) )
 
+#                    X, _ = find_adversary(
+#                        self._dataset.adv_model,
+#                        X,
+#                        self._dataset.targets[np.random.randint(len(self._dataset.targets))],
+#                        mu=.25,
+#                        epsilon=np.linalg.norm(X)/X.shape[0]/10**(15./20.),
+#                        maxits=1,
+#                        stop_thresh=0.75
+#                        )
+#                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                design_mat = np.vstack(design_mat)
+                n_classes = len(self._dataset.targets)
+                one_hot = np.zeros((design_mat.shape[0], n_classes), dtype=np.float32)
+                for r in one_hot: r[np.random.randint(n_classes)] = 1
+                design_mat = self._dataset.create_adversary_from_batch(design_mat, one_hot)
                 if fn:
                     output.append( fn(design_mat) )
                 else:
