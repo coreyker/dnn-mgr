@@ -42,8 +42,12 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
         # load parition information
         self.support   = config[which_set]
         self.file_list = config[which_set+'_files']
-        self.mean      = config['mean']
+        self.mean      = config['mean']        
+        self.mean      = self.mean.reshape((np.prod(self.mean.shape),))
         self.var       = config['var']
+        self.var       = self.var.reshape((np.prod(self.var.shape),))
+        self.istd      = np.reciprocal(np.sqrt(self.var))
+        self.mask      = (self.istd < 20)
         self.tframes   = config['tframes']
 
         # setup adversary
@@ -106,6 +110,9 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
         nu = nu * (nu>=0)
         Y  = (Z + nu*batch) / (1+nu)
         return Y
+    
+    def standardize(self, batch):
+        return (batch - self.mean) * self.istd
 
     @functools.wraps(Dataset.iterator)
     def iterator(self, mode=None, batch_size=1, num_batches=None,
@@ -217,22 +224,23 @@ class FramelevelIterator(FiniteDatasetIterator):
                 for index in next_index:                    
                     X = np.abs(data[index:index+self._dataset.tframes, :])
                     design_mat.append( X.reshape((np.prod(X.shape),)) )
-
-#                    X, _ = find_adversary(
-#                        self._dataset.adv_model,
-#                        X,
-#                        self._dataset.targets[np.random.randint(len(self._dataset.targets))],
-#                        mu=.25,
-#                        epsilon=np.linalg.norm(X)/X.shape[0]/10**(15./20.),
-#                        maxits=1,
-#                        stop_thresh=0.75
-#                        )
-#                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                   
                 design_mat = np.vstack(design_mat)
+                if self._dataset.tframes > 1:
+                    # ideally we'd standardize in a preprocessing layer
+                    # (so that standardization is built-in to the model rather
+                    # than the dataset) but i haven't quite figured out how to do 
+                    # this yet for images, due to a memory error associated with
+                    # a really big diagonal scaling matrix
+                    # (however, it works fine for vectors)
+                    design_mat = self._dataset.standardize(design_mat)
+
                 n_classes = len(self._dataset.targets)
                 one_hot = np.zeros((design_mat.shape[0], n_classes), dtype=np.float32)
                 for r in one_hot: r[np.random.randint(n_classes)] = 1
+                
                 design_mat = self._dataset.create_adversary_from_batch(design_mat, one_hot)
+                
                 if fn:
                     output.append( fn(design_mat) )
                 else:
@@ -282,9 +290,18 @@ class SonglevelIterator(FiniteDatasetIterator):
                         X = data[index:index+self._dataset.tframes, :] # return phase too
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])
-
                     design_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                
                 design_mat = np.vstack(design_mat)
+
+                if self._dataset.tframes > 1:
+                    # ideally we'd standardize in a preprocessing layer
+                    # (so that standardization is built-in to the model rather
+                    # than the dataset) but i haven't quite figured out how to do 
+                    # this yet for images, due to a memory error associated with
+                    # a really big diagonal scaling matrix
+                    # (however, it works fine for vectors)
+                    design_mat = self._dataset.standardize(design_mat)
 
                 if fn:
                     output.append( fn(design_mat) )

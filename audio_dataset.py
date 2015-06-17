@@ -236,6 +236,12 @@ class SonglevelIterator(FiniteDatasetIterator):
                 design_mat = np.vstack(design_mat)
                 
                 if self._dataset.tframes > 1:
+                    # ideally we'd standardize in a preprocessing layer
+                    # (so that standardization is built-in to the model rather
+                    # than the dataset) but i haven't quite figured out how to do 
+                    # this yet for images, due to a memory error associated with
+                    # a really big diagonal scaling matrix
+                    # (however, it works fine for vectors)                    
                     design_mat = self._dataset.standardize(design_mat)
                 
                 if fn:
