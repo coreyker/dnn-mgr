@@ -39,8 +39,12 @@ class AudioDataset(DenseDesignMatrixPyTables):
         # load parition information
         self.support   = config[which_set]
         self.file_list = config[which_set+'_files']
-        self.mean      = config['mean']
+        self.mean      = config['mean']        
+        self.mean      = self.mean.reshape((np.prod(self.mean.shape),))
         self.var       = config['var']
+        self.var       = self.var.reshape((np.prod(self.var.shape),))
+        self.istd      = np.reciprocal(np.sqrt(self.var))
+        self.mask      = (self.istd < 20)
         self.tframes   = config['tframes']
 
         if self.tframes > 1:
@@ -123,6 +127,9 @@ class AudioDataset(DenseDesignMatrixPyTables):
                                   return_tuple=return_tuple,
                                   convert=convert)
 
+    def standardize(self, batch):
+        return (batch - self.mean) * self.istd
+
 class FramelevelIterator(FiniteDatasetIterator):
     '''
     Returns individual (spectrogram) frames/slices from the dataset
@@ -162,8 +169,18 @@ class FramelevelIterator(FiniteDatasetIterator):
                 design_mat = []
                 for index in next_index:                    
                     X = np.abs(data[index:index+self._dataset.tframes, :])
-                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
+                    design_mat.append( X.reshape((np.prod(X.shape),)) ) 
+
                 design_mat = np.vstack(design_mat)
+                
+                if self._dataset.tframes > 1:
+                    # ideally we'd standardize in a preprocessing layer
+                    # (so that standardization is built-in to the model rather
+                    # than the dataset) but i haven't quite figured out how to do 
+                    # this yet for images, due to a memory error associated with
+                    # a really big diagonal scaling matrix
+                    # (however, it works fine for vectors)
+                    design_mat = self._dataset.standardize(design_mat)
 
                 if fn:
                     output.append( fn(design_mat) )
@@ -214,10 +231,13 @@ class SonglevelIterator(FiniteDatasetIterator):
                         X = data[index:index+self._dataset.tframes, :] # return phase too
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])
+                    design_mat.append( X.reshape((np.prod(X.shape),)) )
 
-                    design_mat.append( X.reshape((np.prod(X.shape),)) )                    
                 design_mat = np.vstack(design_mat)
-
+                
+                if self._dataset.tframes > 1:
+                    design_mat = self._dataset.standardize(design_mat)
+                
                 if fn:
                     output.append( fn(design_mat) )
                 else:
@@ -260,8 +280,8 @@ class PreprocLayer(PretrainedLayer):
         if proc_type == 'standardize':
             dim = nvis
             mask = (self.istd < 20) # in order to ignore near-zero variance inputs
-            self.biases = np.array(-self.mean * self.istd * mask, dtype=np.float32)
-            self.weights = np.array(np.diag(self.istd * mask), dtype=np.float32)
+            self.biases = np.array(-self.mean * self.istd * mask, dtype=np.float32) 
+            self.weights = np.array(np.diag(self.istd * mask), dtype=np.float32) #!!!gives memory error for convnet (because diag not treated as sparse mat)
             
         if proc_type == 'pca_whiten':
             raise NotImplementedError(
