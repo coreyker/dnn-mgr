@@ -284,7 +284,8 @@ def create_partition(hdf5, partition_save_name, train_list, valid_list=None, tes
         sum_x2 = np.zeros((nclasses, tframes, nfeats), dtype=np.float32)
 
         nsamples = np.zeros(nclasses)
-        for f in train_list:
+        for fnum, f in enumerate(train_list):
+            print "processing file %d of %d" % (fnum, len(train_list))
             offset, nframes, key, target = file_index[f]
             sup = offset + np.arange(0,nframes-tframes,np.int(tframes/thop))
             

@@ -48,7 +48,7 @@ class AudioDataset(DenseDesignMatrixPyTables):
         self.tframes   = config['tframes']
 
         if self.tframes > 1:
-            view_converter = DefaultViewConverter((self.tframes, len(self.mean), 1))
+            view_converter = DefaultViewConverter((self.tframes, len(self.mean)/self.tframes, 1))
             super(AudioDataset, self).__init__(X=data.X, y=data.y,
                 view_converter=view_converter)
         else:
