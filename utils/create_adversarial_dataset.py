@@ -71,6 +71,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 target = el[1]
             elif mode == 'random':
                 target = np.random.randint(n_classes)
+            elif mode == 'all_wrong':
+                cand = np.setdiff1d(np.arange(n_classes),el[1]) # remove ground truth label from set of options
+                target = cand[np.random.randint(len(cand))]
 
             if 1: # re-read audio (seems to be bug when reading from h5)
                 f = el[2]
@@ -122,7 +125,10 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             dnn_label    = np.argmax(hist) # most used label
             true_label   = el[1] #np.argmax(el[1])
 
-            dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label]) 
+            X_diff = Mag-X_adv
+            out_snr = 20*np.log10(np.linalg.norm(Mag)/np.linalg.norm(X_diff))
+            
+            dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label, out_snr]) 
 
             print 'Mode: {}, True label: {}, DNN adversarial label: {}'.format(mode, true_label, dnn_label)
             if aux_model:
@@ -148,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('--which_layers', nargs='*', type=int, help='(optional) layer(s) from dnn to be passed to auxiliary model')
 
     # three variants
-    parser.add_argument('--mode', help='either all_same, perfect, or random')
+    parser.add_argument('--mode', help='either all_same, perfect, random, all_wrong')
     parser.add_argument('--label', type=int, help='label to minimize loss on (only used in all_same mode)')
     parser.add_argument('--root_dir', help='dataset directory')
 
