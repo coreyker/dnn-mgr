@@ -250,6 +250,17 @@ if __name__ == '__main__':
     batch       = input_space.make_theano_batch()
     fprop_theano = theano.function([batch], dnn_model.fprop(batch))
 
+    dnn_model = serial.load(args.dnn_model)
+    if isinstance(dnn_model.layers[0], PreprocLayer):
+        print 'Preprocessing layer detected'
+        fwd_xform = None
+        back_xform = None
+    else:
+        print 'No preprocessing layer detected'
+        trainset = yaml_parse.load(dnn_model.dataset_yaml_src)
+        fwd_xform = lambda batch: (batch - trainset.mean) * trainset.istd
+        back_xform = lambda batch: batch / trainset.istd + trainset.mean
+
     # load audio file
     if args.test_file.endswith('.wav'):
         read_fun = audiolab.wavread             
@@ -293,6 +304,7 @@ if __name__ == '__main__':
     if view_converter:
         def fprop(batch):
             data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            data = fwd_xform(data)
             fprop_theano(view_converter.get_formatted_batch(data, input_space))
     else:
         fprop = fprop_theano
@@ -321,7 +333,9 @@ if __name__ == '__main__':
         epsilon=epsilon, 
         maxits=100, 
         stop_thresh=0.9, 
-        griffin_lim=True)
+        griffin_lim=True,
+        fwd_xform=fwd_xform,
+        back_xform=back_xform)
 
     # test advesary
     p1 = np.argmax(np.sum(fprop(X_adv), axis=0))
