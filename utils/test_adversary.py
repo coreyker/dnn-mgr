@@ -94,10 +94,9 @@ def find_adversary(model, X0, label, fwd_xform=None, back_xform=None, P0=None, m
             data = fwd_xform(data)
 
             topo_view = grad_theano(view_converter.get_formatted_batch(data, input_space), labels)
-            topo_view = back_xform(topo_view)
-
             design_mat = view_converter.topo_view_to_design_mat(topo_view)
-            
+            design_mat = back_xform(design_mat)
+
             return np.vstack([np.reshape(r, (tframes, dim)) for r in design_mat])
 
         def fprop(batch):

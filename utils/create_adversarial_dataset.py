@@ -19,8 +19,12 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
     Function to compute the file-level classification error by classifying
     individual frames and then voting for the class with highest cumulative probability
     """
-    if back_xform is None: back_xform = lambda X: X
-    if fwd_xform is None: fwd_xform = lambda X: X
+    if fwd_xform is None: 
+        print 'fwd_xform=None, using identity'
+        fwd_xform = lambda X: X
+    if back_xform is None: 
+        print 'back_xform=None, using identity'
+        back_xform = lambda X: X
 
     n_classes  = len(dataset.targets)    
 
@@ -112,7 +116,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             X_adv, P_adv = find_adversary(
                 model=dnn_model, 
                 X0=Mag, 
-                label=target, 
+                label=target,
+                fwd_xform=fwd_xform,
+                back_xform=back_xform,
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
                 mu=.15, 
                 epsilon=epsilon, 
@@ -127,11 +133,11 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 x_adv = overlap_add(np.hstack((X_adv, X_adv[:,-2:-nfft//2-1:-1])) * np.exp(1j*P_adv), nfft, nhop)
                 audiolab.wavwrite(x_adv, os.path.join(save_adversary_audio, el[2]), 22050, 'pcm16')
 
-            frame_labels = np.argmax(fprop(X_adv), axis=1)
-            hist         = np.bincount(frame_labels, minlength=n_classes)
+            #frame_labels = np.argmax(fprop(X_adv), axis=1)
+            #hist         = np.bincount(frame_labels, minlength=n_classes)
             
-            dnn_label    = np.argmax(hist) # most used label
-            true_label   = el[1] #np.argmax(el[1])
+            dnn_label = np.argmax(np.sum(fprop(X_adv), axis=0)) #np.argmax(hist) # most used label
+            true_label = el[1]
 
             # truncate to correct length
             ext = min(Mag.shape[0], X_adv.shape[0])
@@ -143,7 +149,7 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             
             dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label, out_snr]) 
 
-            print 'Mode: {}, True label: {}, adversarial label: {}, Out snr: {}'.format(mode, true_label, dnn_label, out_snr)
+            print 'Mode:{}, True label:{}, Adv label:{}, Sel label:{}, Out snr: {}'.format(mode, true_label, target, dnn_label, out_snr)
             if aux_model:
                 fft_agg  = aggregate_features(dnn_model, X_adv, which_layers)
                 aux_vote = np.argmax(np.bincount(np.array(aux_model.predict(fft_agg), dtype='int')))
