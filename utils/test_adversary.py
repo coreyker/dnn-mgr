@@ -6,7 +6,7 @@ import numpy as np
 import theano
 from theano import tensor as T
 from pylearn2.utils import serial
-from audio_dataset import AudioDataset
+from audio_dataset import AudioDataset, PreprocLayer
 from pylearn2.datasets.dense_design_matrix import DefaultViewConverter
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 import pylearn2.config.yaml_parse as yaml_parse
