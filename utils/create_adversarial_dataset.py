@@ -6,7 +6,7 @@ import numpy as np
 import theano
 from theano import tensor as T
 from pylearn2.utils import serial
-from audio_dataset import AudioDataset
+from audio_dataset import AudioDataset, PreprocLayer
 from pylearn2.space import CompositeSpace, Conv2DSpace, VectorSpace, IndexSpace
 from pylearn2.datasets.dense_design_matrix import DefaultViewConverter
 import pylearn2.config.yaml_parse as yaml_parse
@@ -14,11 +14,14 @@ from test_adversary import winfunc, compute_fft, overlap_add, griffin_lim_proj, 
 import pdb
 
 
-def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None):
+def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='all_same', label=0, snr=30, aux_model=None, aux_save_file=None, which_layers=None, save_adversary_audio=None, fwd_xform=None, back_xform=None):
     """
     Function to compute the file-level classification error by classifying
     individual frames and then voting for the class with highest cumulative probability
     """
+    if back_xform is None: back_xform = lambda X: X
+    if fwd_xform is None: fwd_xform = lambda X: X
+
     n_classes  = len(dataset.targets)    
 
     X     = dnn_model.get_input_space().make_theano_batch()
@@ -34,12 +37,15 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
         tframes = 1
         view_converter = None
 
-    if view_converter:
+    if view_converter is not None:
         def fprop(batch):
             nframes = batch.shape[0]
             thop = 1.
             sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
+            
             data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            data = fwd_xform(data)
+            
             return fprop_theano(view_converter.get_formatted_batch(data, input_space))
 
     else:
@@ -100,6 +106,8 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 Mag, Phs = compute_fft(x)
                 Mag = Mag[:,:513]
                 Phs = Phs[:,:513]
+            else:
+                raise ValueError("Check that song-level iterator is indeed returning 'raw data'") 
 
             X_adv, P_adv = find_adversary(
                 model=dnn_model, 
@@ -178,6 +186,16 @@ if __name__ == '__main__':
         parser.error('--aux_save_file x must be specified together with --aux_model')      
 
     dnn_model = serial.load(args.dnn_model)
+    if isinstance(dnn_model.layers[0], PreprocLayer):
+        print 'Preprocessing layer detected'
+        fwd_xform = None
+        back_xform = None
+    else:
+        print 'No preprocessing layer detected'
+        trainset = yaml_parse.load(dnn_model.dataset_yaml_src)
+        fwd_xform = lambda batch: (batch - trainset.mean) * trainset.istd
+        back_xform = lambda batch: batch / trainset.istd + trainset.mean
+    
     p = re.compile(r"which_set.*'(train)'")
     dataset_yaml = p.sub("which_set: 'test'", dnn_model.dataset_yaml_src)
     testset = yaml_parse.load(dataset_yaml)
@@ -198,4 +216,7 @@ if __name__ == '__main__':
         aux_model=aux_model, 
         aux_save_file=args.aux_save_file, 
         which_layers=args.which_layers,
-        save_adversary_audio=args.save_adversary_audio)
+        save_adversary_audio=args.save_adversary_audio,
+        fwd_xform=fwd_xform,
+        back_xform=back_xform)
+

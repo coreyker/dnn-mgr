@@ -13,8 +13,13 @@ import pylearn2.config.yaml_parse as yaml_parse
 from utils.read_mp3 import read_mp3
 import pdb
 
-def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5, griffin_lim=False):
+def find_adversary(model, X0, label, fwd_xform=None, back_xform=None, P0=None, mu=.1, epsilon=.25, maxits=10, stop_thresh=0.5, griffin_lim=False):
     '''
+    *** Assumes input is not standardized (i.e., operates on raw inputs)
+    *** If model does not include a standardization layer then 
+    *** fwd_xform and back_xform must be be specified, where
+    *** fwd_xform(x) = (x-mean)/std  and back_xform(x) = x*std + mean
+
     Solves:
 
     y* = argmin_y f(y; label) 
@@ -49,6 +54,10 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     X0 - an example that the model classifies correctly
     label - an incorrect label
     '''
+
+    if back_xform is None: back_xform = lambda X: X
+    if fwd_xform is None: fwd_xform = lambda X: X
+
     # convert integer label into one-hot vector
     n_classes, n_examples = model.get_output_space().dim, X0.shape[0]
     nfft = 2*(X0.shape[1]-1)
@@ -58,9 +67,7 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     in_batch  = model.get_input_space().make_theano_batch()
     out_batch = model.get_output_space().make_theano_batch()
 
-    #cost      = model.cost(one_hot, model.fprop(in_batch))
     cost      = model.cost(out_batch, model.fprop(in_batch))
-    #cost      = model.layers[-1].cost(one_hot, model.fprop(in_batch))
     dCost     = T.grad(cost * n_examples, in_batch)
 
     grad_theano = theano.function([in_batch, out_batch], dCost)
@@ -80,19 +87,31 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
     thop = 1.
     sup = np.arange(0,nframes-tframes+1, np.int(tframes/thop))
 
-    if view_converter:
+    if view_converter is not None:
         def grad(batch, labels):            
-            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            
+            data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])            
+            data = fwd_xform(data)
+
             topo_view = grad_theano(view_converter.get_formatted_batch(data, input_space), labels)
+            topo_view = back_xform(topo_view)
+
             design_mat = view_converter.topo_view_to_design_mat(topo_view)
+            
             return np.vstack([np.reshape(r, (tframes, dim)) for r in design_mat])
 
         def fprop(batch):
+            
             data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            data = fwd_xform(data)
+
             return fprop_theano(view_converter.get_formatted_batch(data, input_space))
 
         def fcost(batch, labels):
+        
             data = np.vstack([np.reshape(batch[i:i+tframes, :],(tframes*dim,)) for i in sup])
+            data = fwd_xform(data)
+
             return fcost_theano(view_converter.get_formatted_batch(data, input_space), labels)
     else:
         grad = grad_theano
@@ -107,18 +126,19 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
 
     # projected gradient:
     last_pred = 0
-    #Y = np.array(np.random.rand(*X0.shape), dtype=np.float32) 
     Y = np.copy(X0)
     Y_old = np.copy(Y)
     t_old = 1
+
     print 'cost(X0,y): ', fcost(X0, one_hot)
+
     for i in xrange(maxits):        
 
         # gradient step        
         g = grad(Y, one_hot)
         Z = Y - mu  * g
         print 'cost(X{},y): {}'.format(i+1, fcost(Z, one_hot))
-             
+
         # non-negative projection
         Z = Z * (Z>0)
 
@@ -126,12 +146,9 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
             Z, P0 = griffin_lim_proj(np.hstack((Z, Z[:,-2:-nfft/2-1:-1])), P0, its=0)
         
         # maximum allowable signal-to-noise projection
-        nu = np.linalg.norm((Z-X0))/n_examples/epsilon - 1 # lagrange multiplier
+        nu = np.linalg.norm(Z-X0)/n_examples/epsilon - 1 # lagrange multiplier
         nu = nu * (nu>=0)
         Y  = (Z + nu*X0) / (1+nu)
-
-        #nu=0
-        #Y=np.copy(Z)
 
         # FISTA momentum
         t = .5 + np.sqrt(1+4*t_old**2)/2.
@@ -139,9 +156,7 @@ def find_adversary(model, X0, label, P0=None, mu=.1, epsilon=.25, maxits=10, sto
         Y += alpha * (Y - Y_old)
         Y_old = np.copy(Y)
         t_old = t
-        #'''
         
-
         # stopping condition
         pred = np.sum(fprop(Y), axis=0)
         pred /= np.sum(pred)

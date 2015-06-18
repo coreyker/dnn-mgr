@@ -234,7 +234,7 @@ class SonglevelIterator(FiniteDatasetIterator):
                     design_mat.append( X.reshape((np.prod(X.shape),)) )
 
                 design_mat = np.vstack(design_mat)
-                
+                '''
                 if self._dataset.tframes > 1:
                     # ideally we'd standardize in a preprocessing layer
                     # (so that standardization is built-in to the model rather
@@ -243,7 +243,7 @@ class SonglevelIterator(FiniteDatasetIterator):
                     # a really big diagonal scaling matrix
                     # (however, it works fine for vectors)                    
                     design_mat = self._dataset.standardize(design_mat)
-                
+                '''
                 if fn:
                     output.append( fn(design_mat) )
                 else:
