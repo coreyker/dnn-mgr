@@ -109,7 +109,7 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 mu=.15, 
                 epsilon=epsilon, 
                 maxits=50, 
-                stop_thresh=0.9, 
+                stop_thresh=0.5, 
                 griffin_lim=True)
             
             if save_adversary_audio: 
@@ -125,12 +125,17 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             dnn_label    = np.argmax(hist) # most used label
             true_label   = el[1] #np.argmax(el[1])
 
+            # truncate to correct length
+            ext = min(Mag.shape[0], X_adv.shape[0])
+            Mag = Mag[:ext,:]
+            X_adv = X_adv[:ext,:]
+
             X_diff = Mag-X_adv
             out_snr = 20*np.log10(np.linalg.norm(Mag)/np.linalg.norm(X_diff))
             
             dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label, out_snr]) 
 
-            print 'Mode: {}, True label: {}, DNN adversarial label: {}'.format(mode, true_label, dnn_label)
+            print 'Mode: {}, True label: {}, adversarial label: {}, Out snr: {}'.format(mode, true_label, dnn_label, out_snr)
             if aux_model:
                 fft_agg  = aggregate_features(dnn_model, X_adv, which_layers)
                 aux_vote = np.argmax(np.bincount(np.array(aux_model.predict(fft_agg), dtype='int')))
@@ -164,7 +169,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    assert args.mode in ['all_same', 'perfect', 'random'] 
+    assert args.mode in ['all_same', 'perfect', 'random', 'all_wrong'] 
     if args.mode == 'all_same' and not args.label:
         parser.error('--label x must be specified together with all_same mode')
     if args.aux_model and not args.which_layers:
@@ -189,7 +194,7 @@ if __name__ == '__main__':
         save_file=args.dnn_save_file, 
         mode=args.mode, 
         label=args.label, 
-        snr=15., 
+        snr=0., 
         aux_model=aux_model, 
         aux_save_file=args.aux_save_file, 
         which_layers=args.which_layers,

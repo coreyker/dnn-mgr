@@ -99,17 +99,17 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
         self.hdf5.close()   
     
     def create_adversary_from_batch(self, batch, label, mu=0.25, snr=15):
-        n_examples = batch.shape[0]
-        epsilon = np.linalg.norm(batch)/n_examples/10**(snr/20.)
+        #n_examples = batch.shape[0]
+        #epsilon = np.linalg.norm(batch)/n_examples/10**(snr/20.)
 
-        g = self.grad(batch, label) * n_examples
+        g = self.grad(batch, label) #* n_examples
         Z = batch - mu * np.sign(g)
         Z = Z * (Z>0)
 
-        nu = np.linalg.norm((Z-batch))/n_examples/epsilon - 1 # lagrange multiplier
-        nu = nu * (nu>=0)
-        Y  = (Z + nu*batch) / (1+nu)
-        return Y
+        #nu = np.linalg.norm((Z-batch))/n_examples/epsilon - 1 # lagrange multiplier
+        #nu = nu * (nu>=0)
+        #Y  = (Z + nu*batch) / (1+nu)
+        return Z#Y
     
     def standardize(self, batch):
         return (batch - self.mean) * self.istd
