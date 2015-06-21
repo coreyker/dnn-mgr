@@ -122,7 +122,7 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
                 mu=.15, 
                 epsilon=epsilon, 
-                maxits=50, 
+                maxits=5, 
                 stop_thresh=0.5, 
                 griffin_lim=True)
             
@@ -218,7 +218,7 @@ if __name__ == '__main__':
         save_file=args.dnn_save_file, 
         mode=args.mode, 
         label=args.label, 
-        snr=0., 
+        snr=15, 
         aux_model=aux_model, 
         aux_save_file=args.aux_save_file, 
         which_layers=args.which_layers,

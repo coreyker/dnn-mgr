@@ -241,8 +241,10 @@ if __name__ == '__main__':
     parser.add_argument('--label', type=int, help='target to aim for')
     parser.add_argument('--filter', type=float, help='apply filter to adversary and retest')
     parser.add_argument('--out_path', help='location for saving adversary (name automatically generated)')
+    parser.add_argument('--mu', type=float)
 
     args = parser.parse_args()
+    if args.mu is None: args.mu = 0.1
 
     # load model, fprop function
     dnn_model   = serial.load(args.dnn_model)
@@ -329,7 +331,7 @@ if __name__ == '__main__':
         X0=X0,
         label=args.label, 
         P0=P0, 
-        mu=0.1, 
+        mu=args.mu, 
         epsilon=epsilon, 
         maxits=100, 
         stop_thresh=0.9, 
