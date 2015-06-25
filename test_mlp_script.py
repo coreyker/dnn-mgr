@@ -70,14 +70,16 @@ def file_misclass_error(model, dataset):
         # display progress indicator
         sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
         sys.stdout.flush()
-    
-        fft_data     = np.abs(np.array(el[0], dtype=np.float32))
-        frame_labels = np.argmax(fprop(fft_data), axis=1)
-        hist         = np.bincount(frame_labels, minlength=n_classes)
-        vote_label   = np.argmax(hist) # most used label
-        #vote_label = np.argmax(np.sum(fprop(fft_data), axis=0))
+
+        fft_data     = np.array(el[0], dtype=np.float32)
+        #frame_labels = np.argmax(fprop(fft_data), axis=1)
+        #hist         = np.bincount(frame_labels, minlength=n_classes)
+        #vote_label   = np.argmax(hist) # most used label
+        vote_label = np.argmax(np.sum(fprop(fft_data), axis=0))
         true_label = el[1] #np.argmax(el[1])
         confusion[true_label, vote_label] += 1
+        #print 'true: {}, vote: {}'.format(true_label, vote_label)
+        #pdb.set_trace()
 
     total_error = 100*(1 - np.sum(np.diag(confusion)) / np.sum(confusion))
     print ''
@@ -108,15 +110,16 @@ def file_misclass_error_printf(model, dataset, save_file, label_list=None):
             sys.stdout.write('Classify progress: %2.0f%%\r' % (100*i/float(n_examples)))
             sys.stdout.flush()
         
-            fft_data     = np.abs(np.array(el[0], dtype=np.float32))
-            frame_labels = np.argmax(fprop(fft_data), axis=1)
-            hist         = np.bincount(frame_labels, minlength=n_classes)
-            
+            fft_data     = np.array(el[0], dtype=np.float32)
+            #frame_labels = np.argmax(fprop(fft_data), axis=1)
+            #hist         = np.bincount(frame_labels, minlength=n_classes)
+            choice = np.argmax(np.sum(fprop(fft_data), axis=0))
+
             if label_list: # use-string labels
-                vote_label   = label_list[np.argmax(hist)] # most used label
+                vote_label   = label_list[choice] # most used label
                 true_label   = dataset.label_list[el[1]]#np.argmax(el[1])
             else: # use numeric labels
-                vote_label   = np.argmax(hist) # most used label
+                vote_label   = choice # most used label
                 true_label   = el[1] #np.argmax(el[1])
 
             #csvwriter.writerow([dataset.file_list[i], true_label, vote_label])            

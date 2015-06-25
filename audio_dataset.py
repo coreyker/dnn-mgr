@@ -128,7 +128,7 @@ class AudioDataset(DenseDesignMatrixPyTables):
                                   convert=convert)
 
     def standardize(self, batch):
-        return (batch - self.mean) * self.istd
+        return (batch - self.mean) * self.istd * self.mask
 
 class FramelevelIterator(FiniteDatasetIterator):
     '''
@@ -227,14 +227,13 @@ class SonglevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:
-                    if space.dtype=='complex64':
+                    if 0:#space.dtype=='complex64':
                         X = data[index:index+self._dataset.tframes, :] # return phase too
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])
                     design_mat.append( X.reshape((np.prod(X.shape),)) )
 
                 design_mat = np.vstack(design_mat)
-                '''
                 if self._dataset.tframes > 1:
                     # ideally we'd standardize in a preprocessing layer
                     # (so that standardization is built-in to the model rather
@@ -243,7 +242,7 @@ class SonglevelIterator(FiniteDatasetIterator):
                     # a really big diagonal scaling matrix
                     # (however, it works fine for vectors)                    
                     design_mat = self._dataset.standardize(design_mat)
-                '''
+                
                 if fn:
                     output.append( fn(design_mat) )
                 else:

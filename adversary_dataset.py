@@ -104,7 +104,7 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
 
         g = self.grad(batch, label) #* n_examples
         Z = batch - mu * np.sign(g)
-        Z = Z * (Z>0)
+        if self.tframes==1: Z = Z * (Z>0)
 
         #nu = np.linalg.norm((Z-batch))/n_examples/epsilon - 1 # lagrange multiplier
         #nu = nu * (nu>=0)
@@ -112,7 +112,7 @@ class AdversaryDataset(DenseDesignMatrixPyTables):
         return Z#Y
     
     def standardize(self, batch):
-        return (batch - self.mean) * self.istd
+        return (batch - self.mean) * self.istd * self.mask
 
     @functools.wraps(Dataset.iterator)
     def iterator(self, mode=None, batch_size=1, num_batches=None,
@@ -238,7 +238,7 @@ class FramelevelIterator(FiniteDatasetIterator):
                 n_classes = len(self._dataset.targets)
                 one_hot = np.zeros((design_mat.shape[0], n_classes), dtype=np.float32)
                 for r in one_hot: r[np.random.randint(n_classes)] = 1
-                
+
                 design_mat = self._dataset.create_adversary_from_batch(design_mat, one_hot)
                 
                 if fn:
@@ -272,7 +272,6 @@ class SonglevelIterator(FiniteDatasetIterator):
         sup = np.arange(0,nframes-self._dataset.tframes,np.int(self._dataset.tframes/thop))        
         next_index = offset + sup
 
-
         spaces, sources = self._data_specs
         output = []                
 
@@ -286,7 +285,7 @@ class SonglevelIterator(FiniteDatasetIterator):
             else:
                 design_mat = []
                 for index in next_index:
-                    if space.dtype=='complex64':
+                    if 0:#space.dtype=='complex64':
                         X = data[index:index+self._dataset.tframes, :] # return phase too
                     else:
                         X = np.abs(data[index:index+self._dataset.tframes, :])

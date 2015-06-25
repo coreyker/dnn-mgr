@@ -82,7 +82,7 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             elif mode == 'random':
                 target = np.random.randint(n_classes)
             elif mode == 'all_wrong':
-                cand = np.setdiff1d(np.arange(n_classes),el[1]) # remove ground truth label from set of options
+                cand = np.setdiff1d(np.arange(n_classes),np.array(el[1])) # remove ground truth label from set of options
                 target = cand[np.random.randint(len(cand))]
 
             if 1: # re-read audio (seems to be bug when reading from h5)
@@ -199,8 +199,8 @@ if __name__ == '__main__':
     else:
         print 'No preprocessing layer detected'
         trainset = yaml_parse.load(dnn_model.dataset_yaml_src)
-        fwd_xform = lambda batch: (batch - trainset.mean) * trainset.istd
-        back_xform = lambda batch: batch / trainset.istd + trainset.mean
+        fwd_xform = lambda batch: (batch - trainset.mean) * trainset.istd * trainset.mask
+        back_xform = lambda batch: batch / (trainset.istd * trainset.mask) + trainset.mean
     
     p = re.compile(r"which_set.*'(train)'")
     dataset_yaml = p.sub("which_set: 'test'", dnn_model.dataset_yaml_src)
