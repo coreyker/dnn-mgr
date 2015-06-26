@@ -108,8 +108,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                     x = samplerate.resample(x, fs/float(fstmp), 'sinc_best')
 
                 Mag, Phs = compute_fft(x)
-                Mag = Mag[:,:513]
-                Phs = Phs[:,:513]
+                Mag = Mag[:1200,:513]
+                Phs = Phs[:1200,:513]
+                epsilon = np.linalg.norm(Mag)/Mag.shape[0]/10**(snr/20.)
             else:
                 raise ValueError("Check that song-level iterator is indeed returning 'raw data'") 
 
@@ -122,8 +123,8 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
                 P0=np.hstack((Phs, -Phs[:,-2:-dataset.nfft/2-1:-1])), 
                 mu=.15, 
                 epsilon=epsilon, 
-                maxits=5, 
-                stop_thresh=0.5, 
+                maxits=10, 
+                stop_thresh=0.9, 
                 griffin_lim=True)
             
             if save_adversary_audio: 
@@ -136,7 +137,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             #frame_labels = np.argmax(fprop(X_adv), axis=1)
             #hist         = np.bincount(frame_labels, minlength=n_classes)
             
-            dnn_label = np.argmax(np.sum(fprop(X_adv), axis=0)) #np.argmax(hist) # most used label
+            fpass = fprop(X_adv)
+            conf = np.sum(fpass, axis=0) / float(fpass.shape[0])
+            dnn_label = np.argmax(conf) #np.argmax(hist) # most used label
             true_label = el[1]
 
             # truncate to correct length
@@ -147,9 +150,9 @@ def file_misclass_error_printf(dnn_model, root_dir, dataset, save_file, mode='al
             X_diff = Mag-X_adv
             out_snr = 20*np.log10(np.linalg.norm(Mag)/np.linalg.norm(X_diff))
             
-            dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label, out_snr]) 
+            dnn_writer.writerow([dataset.file_list[i], true_label, dnn_label, out_snr, conf[dnn_label]]) 
 
-            print 'Mode:{}, True label:{}, Adv label:{}, Sel label:{}, Out snr: {}'.format(mode, true_label, target, dnn_label, out_snr)
+            print 'Mode:{}, True label:{}, Adv label:{}, Sel label:{}, Conf:{}, Out snr: {}'.format(mode, true_label, target, dnn_label, conf[dnn_label], out_snr)
             if aux_model:
                 fft_agg  = aggregate_features(dnn_model, X_adv, which_layers)
                 aux_vote = np.argmax(np.bincount(np.array(aux_model.predict(fft_agg), dtype='int')))
@@ -200,7 +203,7 @@ if __name__ == '__main__':
         print 'No preprocessing layer detected'
         trainset = yaml_parse.load(dnn_model.dataset_yaml_src)
         fwd_xform = lambda batch: (batch - trainset.mean) * trainset.istd * trainset.mask
-        back_xform = lambda batch: batch / (trainset.istd * trainset.mask) + trainset.mean
+        back_xform = lambda batch: (batch / trainset.istd + trainset.mean) * trainset.mask 
     
     p = re.compile(r"which_set.*'(train)'")
     dataset_yaml = p.sub("which_set: 'test'", dnn_model.dataset_yaml_src)
@@ -218,7 +221,7 @@ if __name__ == '__main__':
         save_file=args.dnn_save_file, 
         mode=args.mode, 
         label=args.label, 
-        snr=15, 
+        snr=15., 
         aux_model=aux_model, 
         aux_save_file=args.aux_save_file, 
         which_layers=args.which_layers,
