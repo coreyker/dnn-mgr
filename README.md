@@ -34,6 +34,7 @@ python prepare_dataset.py \
 	--test_prop 0.25 \
 	--partition_name /path/to/save/partition_configuration.pkl \
 	--compute_std
+	--tframes 100
 ```
 
 This will create the hdf5 dataset file and generate (1/test_prop) stratified partitions. The label_list.txt is a comma or newline separated list of the categorical labels in the dataset (which are matched against file and/or folder names)
@@ -50,6 +51,7 @@ python prepare_dataset.py \
 	--test /path/to/test_list.txt \
 	--partition_name /path/to/save/partition_configuration.pkl \
 	--compute_std
+	--tframes 100
 ```
 
 The lists should be newline separated, and contain the relative path to each file (from the root folder of the dataset). For example if the directory structure is as follows:
